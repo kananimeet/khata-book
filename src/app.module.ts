@@ -21,7 +21,9 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       type: 'postgres',
       ...(process.env.DATABASE_URL
         ? {
-            url: process.env.DATABASE_URL,
+            url: process.env.DATABASE_URL
+              .replace(/[&?]channel_binding=[^&]+/g, '')
+              .replace(/\?$/, ''),
           }
         : {
             host: process.env.DB_HOST || 'localhost',
@@ -33,15 +35,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       ssl:
         process.env.DB_SSL === 'true' ||
         Boolean(process.env.DATABASE_URL?.includes('sslmode=require')),
-      extra:
-        process.env.DB_SSL === 'true' ||
-        Boolean(process.env.DATABASE_URL?.includes('sslmode=require'))
-          ? {
-              ssl: {
+      extra: {
+        ssl:
+          process.env.DB_SSL === 'true' ||
+          Boolean(process.env.DATABASE_URL?.includes('sslmode=require'))
+            ? {
                 rejectUnauthorized: false,
-              },
-            }
-          : undefined,
+              }
+            : false,
+        connectionTimeoutMillis: 10000,
+      },
       entities: [User],
       synchronize: true, // false in production
     }),
