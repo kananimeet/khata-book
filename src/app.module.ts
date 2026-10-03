@@ -19,11 +19,22 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432', 10),
-      username: process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_NAME,
+      ...(process.env.DATABASE_URL
+        ? {
+            url: process.env.DATABASE_URL,
+          }
+        : {
+            host: process.env.DB_HOST || 'localhost',
+            port: parseInt(process.env.DB_PORT || '5432', 10),
+            username: process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
+            password: process.env.DB_PASSWORD,
+            database: process.env.DB_NAME,
+          }),
+      ssl:
+        process.env.DB_SSL === 'true' ||
+        (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=require'))
+          ? { rejectUnauthorized: false }
+          : false,
       entities: [User],
       synchronize: true, // false in production
     }),

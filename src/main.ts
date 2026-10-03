@@ -13,13 +13,17 @@ async function bootstrap() {
     instrument: ObserveInstrument,
   });
 
-  const uploadsPath = join(process.cwd(), 'uploads');
-  if (!existsSync(uploadsPath)) {
-    mkdirSync(uploadsPath, { recursive: true });
+  try {
+    const uploadsPath = join(process.cwd(), 'uploads');
+    if (!existsSync(uploadsPath)) {
+      mkdirSync(uploadsPath, { recursive: true });
+    }
+    app.useStaticAssets(uploadsPath, {
+      prefix: '/uploads/',
+    });
+  } catch {
+    // Ignore read-only filesystem errors in serverless environments
   }
-  app.useStaticAssets(uploadsPath, {
-    prefix: '/uploads/',
-  });
 
   app.enableCors({ origin: true, credentials: true });
   app.setGlobalPrefix('api/v1');
