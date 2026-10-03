@@ -43,7 +43,7 @@ import {
 @ApiBearerAuth()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -94,7 +94,7 @@ export class UserController {
 
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'List users',
     description: 'Retrieve a paginated list of users with optional filtering and search.',

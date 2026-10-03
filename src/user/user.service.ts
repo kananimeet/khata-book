@@ -105,6 +105,9 @@ export class UserService {
     const qb: SelectQueryBuilder<User> =
       this.userRepository.createQueryBuilder('user');
 
+    // Exclude users with role ADMIN so only non-admin users are listed
+    qb.where('user.role != :excludedRole', { excludedRole: UserRole.ADMIN });
+
     if (query.search) {
       qb.andWhere(
         '(user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
@@ -112,7 +115,7 @@ export class UserService {
       );
     }
 
-    if (query.role) {
+    if (query.role && query.role !== UserRole.ADMIN) {
       qb.andWhere('user.role = :role', { role: query.role });
     }
 

@@ -104,6 +104,7 @@ describe('UserService', () => {
       ];
 
       const qb: any = {
+        where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),
         skip: vi.fn().mockReturnThis(),
@@ -115,6 +116,9 @@ describe('UserService', () => {
 
       const result = await service.findAll({ page: 1, limit: 10, search: 'User' });
 
+      expect(qb.where).toHaveBeenCalledWith('user.role != :excludedRole', {
+        excludedRole: UserRole.ADMIN,
+      });
       expect(result.users).toEqual(mockUsers);
       expect(result.total).toBe(2);
       expect(result.page).toBe(1);
