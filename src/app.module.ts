@@ -1,3 +1,4 @@
+import * as pg from 'pg';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -19,6 +20,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
+      driver: pg,
       ...(process.env.DATABASE_URL
         ? {
             url: process.env.DATABASE_URL
