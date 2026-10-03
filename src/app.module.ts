@@ -42,11 +42,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     UserModule,
     AuthModule,
     SeedModule,
-    ObserveModule.forRoot({
-      appKey: 'YOUR_APP_KEY',
-      appSecret: 'YOUR_APP_SECRET',
-      serviceId: 'khata-book',
-    }),
+    ...(process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
+      ? [
+          ObserveModule.forRoot({
+            appKey: process.env.OBSERVE_APP_KEY,
+            appSecret: process.env.OBSERVE_APP_SECRET || '',
+            serviceId: 'khata-book',
+          }),
+        ]
+      : []),
   ],
   controllers: [AppController],
   providers: [AppService],

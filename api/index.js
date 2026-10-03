@@ -55,8 +55,18 @@ async function bootstrap() {
 }
 
 export default async function handler(req, res) {
-  if (!isAppInitialized) {
-    await bootstrap();
+  try {
+    if (!isAppInitialized) {
+      await bootstrap();
+    }
+    return server(req, res);
+  } catch (err) {
+    console.error('Nest Bootstrap Error:', err);
+    return res.status(500).json({
+      statusCode: 500,
+      message: 'Failed to initialize NestJS application on Vercel',
+      error: err?.message || String(err),
+      stack: err?.stack,
+    });
   }
-  return server(req, res);
 }
