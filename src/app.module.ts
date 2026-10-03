@@ -32,9 +32,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
           }),
       ssl:
         process.env.DB_SSL === 'true' ||
-        (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=require'))
-          ? { rejectUnauthorized: false }
-          : false,
+        Boolean(process.env.DATABASE_URL?.includes('sslmode=require')),
+      extra:
+        process.env.DB_SSL === 'true' ||
+        Boolean(process.env.DATABASE_URL?.includes('sslmode=require'))
+          ? {
+              ssl: {
+                rejectUnauthorized: false,
+              },
+            }
+          : undefined,
       entities: [User],
       synchronize: true, // false in production
     }),
