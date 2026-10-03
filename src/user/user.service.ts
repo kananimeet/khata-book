@@ -69,7 +69,9 @@ export class UserService {
     if (createUserDto.mobile) {
       const existingMobile = await this.findByMobile(createUserDto.mobile);
       if (existingMobile) {
-        throw new ConflictException(USER_MOBILE_ALREADY_EXISTS(createUserDto.mobile));
+        throw new ConflictException(
+          USER_MOBILE_ALREADY_EXISTS(createUserDto.mobile),
+        );
       }
     }
 
@@ -163,7 +165,9 @@ export class UserService {
     if (updateUserDto.mobile && updateUserDto.mobile !== user.mobile) {
       const existingMobile = await this.findByMobile(updateUserDto.mobile);
       if (existingMobile) {
-        throw new ConflictException(USER_MOBILE_ALREADY_EXISTS(updateUserDto.mobile));
+        throw new ConflictException(
+          USER_MOBILE_ALREADY_EXISTS(updateUserDto.mobile),
+        );
       }
     }
 

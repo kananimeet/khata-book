@@ -6,9 +6,12 @@ import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { User } from './user/entities/user.entity.js';
+import { Expense } from './expense/entities/expense.entity.js';
+import { ExpensePayment } from './expense/entities/expense-payment.entity.js';
 import { UserModule } from './user/user.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SeedModule } from './seed/seed.module.js';
+import { ExpenseModule } from './expense/expense.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -23,14 +26,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       driver: pg,
       ...(process.env.DATABASE_URL
         ? {
-            url: process.env.DATABASE_URL
-              .replace(/[&?]channel_binding=[^&]+/g, '')
-              .replace(/\?$/, ''),
+            url: process.env.DATABASE_URL.replace(
+              /[&?]channel_binding=[^&]+/g,
+              '',
+            ).replace(/\?$/, ''),
           }
         : {
             host: process.env.DB_HOST || 'localhost',
             port: parseInt(process.env.DB_PORT || '5432', 10),
-            username: process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
+            username:
+              process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
             password: process.env.DB_PASSWORD,
             database: process.env.DB_NAME,
           }),
@@ -47,14 +52,16 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
             : false,
         connectionTimeoutMillis: 10000,
       },
-      entities: [User],
+      entities: [User, Expense, ExpensePayment],
       synchronize: true, // false in production
     }),
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Expense, ExpensePayment]),
     UserModule,
     AuthModule,
     SeedModule,
-    ...(process.env.OBSERVE_APP_KEY && process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
+    ExpenseModule,
+    ...(process.env.OBSERVE_APP_KEY &&
+    process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
       ? [
           ObserveModule.forRoot({
             appKey: process.env.OBSERVE_APP_KEY,
