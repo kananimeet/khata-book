@@ -1,15 +1,27 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 import { AppModule, ObserveInstrument } from './app.module.js';
 import { TryCatchInterceptor } from './common/interceptors/try-catch.interceptor.js';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     instrument: ObserveInstrument,
   });
 
+  const uploadsPath = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsPath)) {
+    mkdirSync(uploadsPath, { recursive: true });
+  }
+  app.useStaticAssets(uploadsPath, {
+    prefix: '/uploads/',
+  });
+
+  app.enableCors({ origin: true, credentials: true });
   app.setGlobalPrefix('api/v1');
 
   app.useGlobalPipes(

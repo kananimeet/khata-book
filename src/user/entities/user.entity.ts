@@ -18,8 +18,14 @@ export class User {
   @Column({ type: 'varchar', length: 255, unique: true })
   email: string;
 
-  @Column({ type: 'varchar', length: 255, select: false })
+  @Column({ type: 'varchar', length: 20, nullable: true, unique: true })
+  mobile?: string;
+
+  @Column({ type: 'varchar', length: 255, select: false, nullable: true })
   password?: string;
+
+  @Column({ type: 'text', nullable: true })
+  profile_picture?: string;
 
   @Column({
     type: 'enum',
