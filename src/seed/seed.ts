@@ -19,14 +19,16 @@ import { SEED_FAILED } from '../common/message.js';
       driver: pg,
       ...(process.env.DATABASE_URL
         ? {
-            url: process.env.DATABASE_URL
-              .replace(/[&?]channel_binding=[^&]+/g, '')
-              .replace(/\?$/, ''),
+            url: process.env.DATABASE_URL.replace(
+              /[&?]channel_binding=[^&]+/g,
+              '',
+            ).replace(/\?$/, ''),
           }
         : {
             host: process.env.DB_HOST || 'localhost',
             port: parseInt(process.env.DB_PORT || '5432', 10),
-            username: process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
+            username:
+              process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
             password: process.env.DB_PASSWORD,
             database: process.env.DB_NAME,
           }),

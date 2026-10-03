@@ -24,4 +24,3 @@ export class AdminLoginDto {
   @IsNotEmpty({ message: PASSWORD_REQUIRED })
   password: string;
 }
-
