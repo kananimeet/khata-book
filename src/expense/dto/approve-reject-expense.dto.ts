@@ -12,16 +12,27 @@ export class ApproveExpenseDto {
     const val =
       value !== undefined
         ? value
-        : obj?.note !== undefined
-          ? obj?.note
-          : obj?.comment !== undefined
-            ? obj?.comment
-            : obj?.reason;
+        : obj?.remarks !== undefined
+          ? obj?.remarks
+          : obj?.note !== undefined
+            ? obj?.note
+            : obj?.comment !== undefined
+              ? obj?.comment
+              : obj?.reason;
     return val !== undefined && val !== null ? String(val) : undefined;
   })
   @IsOptional()
   @IsString()
   admin_note?: string;
+
+  @ApiPropertyOptional({
+    example: 'Payment received via UPI, approved',
+    description: 'Alias for admin_note',
+  })
+  @Expose()
+  @IsOptional()
+  @IsString()
+  remarks?: string;
 
   @ApiPropertyOptional({
     example: 'Payment received via UPI, approved',
@@ -52,16 +63,27 @@ export class RejectExpenseDto {
     const val =
       value !== undefined
         ? value
-        : obj?.admin_note !== undefined
-          ? obj?.admin_note
-          : obj?.note !== undefined
-            ? obj?.note
-            : obj?.comment;
+        : obj?.remarks !== undefined
+          ? obj?.remarks
+          : obj?.admin_note !== undefined
+            ? obj?.admin_note
+            : obj?.note !== undefined
+              ? obj?.note
+              : obj?.comment;
     return val !== undefined && val !== null ? String(val) : undefined;
   })
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({
+    example: 'Payment receipt is invalid or not received',
+    description: 'Alias for reason',
+  })
+  @Expose()
+  @IsOptional()
+  @IsString()
+  remarks?: string;
 
   @ApiPropertyOptional({
     example: 'Payment receipt is invalid or not received',

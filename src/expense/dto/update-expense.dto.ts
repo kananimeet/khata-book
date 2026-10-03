@@ -191,9 +191,11 @@ export class UpdateExpenseDto {
     const val =
       value !== undefined
         ? value
-        : obj?.reason !== undefined
-          ? obj?.reason
-          : obj?.comment;
+        : obj?.remarks !== undefined
+          ? obj?.remarks
+          : obj?.reason !== undefined
+            ? obj?.reason
+            : obj?.comment;
     return val !== undefined && val !== null ? String(val) : undefined;
   })
   @IsOptional()
@@ -206,6 +208,24 @@ export class UpdateExpenseDto {
   })
   @Expose()
   @IsOptional()
+  @IsString({ message: 'remarks must be a string' })
+  remarks?: string;
+
+  @ApiPropertyOptional({
+    example: 'Updated room rate',
+    description: 'Alias for admin_note',
+  })
+  @Expose()
+  @IsOptional()
   @IsString({ message: 'reason must be a string' })
   reason?: string;
+
+  @ApiPropertyOptional({
+    example: 'Updated room rate',
+    description: 'Alias for admin_note',
+  })
+  @Expose()
+  @IsOptional()
+  @IsString({ message: 'comment must be a string' })
+  comment?: string;
 }
