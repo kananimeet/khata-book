@@ -79,4 +79,17 @@ export class CreateUserDto {
   })
   @IsBoolean({ message: 'is_active must be a boolean' })
   is_active?: boolean;
+
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Login status (false until first successful login)',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean({ message: 'has_login must be a boolean' })
+  has_login?: boolean;
 }

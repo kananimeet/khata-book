@@ -86,6 +86,7 @@ export class UserService {
       password: hashedPassword,
       role: createUserDto.role || UserRole.USER,
       is_active: createUserDto.is_active ?? true,
+      has_login: createUserDto.has_login ?? false,
     });
 
     const savedUser = await this.userRepository.save(user);
@@ -95,6 +96,10 @@ export class UserService {
 
   async updatePassword(id: string, hashedPassword: string): Promise<void> {
     await this.userRepository.update(id, { password: hashedPassword });
+  }
+
+  async updateHasLogin(id: string, has_login = true): Promise<void> {
+    await this.userRepository.update(id, { has_login });
   }
 
   async findAll(query: QueryUserDto) {
@@ -121,6 +126,10 @@ export class UserService {
 
     if (query.is_active !== undefined) {
       qb.andWhere('user.is_active = :isActive', { isActive: query.is_active });
+    }
+
+    if (query.has_login !== undefined) {
+      qb.andWhere('user.has_login = :hasLogin', { hasLogin: query.has_login });
     }
 
     qb.orderBy('user.created_at', 'DESC');

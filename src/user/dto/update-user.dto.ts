@@ -74,4 +74,17 @@ export class UpdateUserDto {
   })
   @IsBoolean({ message: 'is_active must be a boolean' })
   is_active?: boolean;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Updated login status of the user',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean({ message: 'has_login must be a boolean' })
+  has_login?: boolean;
 }

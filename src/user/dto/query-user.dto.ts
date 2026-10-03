@@ -54,4 +54,17 @@ export class QueryUserDto {
   })
   @IsBoolean()
   is_active?: boolean;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Filter users by login status',
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === 'true' || value === true) return true;
+    if (value === 'false' || value === false) return false;
+    return value;
+  })
+  @IsBoolean()
+  has_login?: boolean;
 }

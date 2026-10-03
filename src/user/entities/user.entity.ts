@@ -37,6 +37,9 @@ export class User {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  @Column({ type: 'boolean', default: false })
+  has_login: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

@@ -14,6 +14,7 @@ describe('UserService', () => {
       createQueryBuilder: vi.fn(),
       create: vi.fn((dto) => ({ ...dto })),
       save: vi.fn((user) => Promise.resolve({ id: 'uuid-123', ...user })),
+      update: vi.fn(),
     };
 
     service = new UserService(mockRepository);
@@ -124,6 +125,35 @@ describe('UserService', () => {
       expect(result.page).toBe(1);
       expect(result.limit).toBe(10);
       expect(result.totalPages).toBe(1);
+    });
+
+    it('should filter users by has_login status', async () => {
+      const qb: any = {
+        where: vi.fn().mockReturnThis(),
+        andWhere: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        skip: vi.fn().mockReturnThis(),
+        take: vi.fn().mockReturnThis(),
+        getManyAndCount: vi.fn().mockResolvedValue([[], 0]),
+      };
+
+      mockRepository.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAll({ has_login: false });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('user.has_login = :hasLogin', {
+        hasLogin: false,
+      });
+    });
+  });
+
+  describe('updateHasLogin', () => {
+    it('should update has_login flag for user', async () => {
+      await service.updateHasLogin('uuid-123', true);
+
+      expect(mockRepository.update).toHaveBeenCalledWith('uuid-123', {
+        has_login: true,
+      });
     });
   });
 

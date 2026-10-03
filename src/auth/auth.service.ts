@@ -59,6 +59,11 @@ export class AuthService {
       throw new UnauthorizedException(genericErrorMessage);
     }
 
+    if (!user.has_login) {
+      await this.userService.updateHasLogin(user.id, true);
+      user.has_login = true;
+    }
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -70,11 +75,13 @@ export class AuthService {
     return {
       message: LOGIN_SUCCESS,
       access_token,
+      has_login: user.has_login,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
+        has_login: user.has_login,
       },
     };
   }
@@ -93,12 +100,14 @@ export class AuthService {
       message: EMAIL_CHECKED_SUCCESS,
       exists: true,
       is_password_set: !!user.password,
+      has_login: user.has_login ?? false,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
         profile_picture: user.profile_picture ?? null,
+        has_login: user.has_login ?? false,
       },
     };
   }
@@ -124,6 +133,11 @@ export class AuthService {
 
     await this.userService.updatePassword(user.id, hashedPassword);
 
+    if (!user.has_login) {
+      await this.userService.updateHasLogin(user.id, true);
+      user.has_login = true;
+    }
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -135,11 +149,13 @@ export class AuthService {
     return {
       message: PASSWORD_SET_SUCCESS,
       access_token,
+      has_login: user.has_login,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
+        has_login: user.has_login,
       },
     };
   }
@@ -163,6 +179,11 @@ export class AuthService {
       throw new UnauthorizedException(INVALID_CREDENTIALS);
     }
 
+    if (!user.has_login) {
+      await this.userService.updateHasLogin(user.id, true);
+      user.has_login = true;
+    }
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -174,11 +195,13 @@ export class AuthService {
     return {
       message: USER_LOGIN_SUCCESS,
       access_token,
+      has_login: user.has_login,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
+        has_login: user.has_login,
       },
     };
   }
