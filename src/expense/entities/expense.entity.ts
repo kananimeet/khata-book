@@ -7,6 +7,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import { User } from '../../user/entities/user.entity.js';
@@ -15,10 +16,16 @@ import { ColumnNumericTransformer } from '../../helper/numeric-transformer.js';
 import { ExpensePayment } from './expense-payment.entity.js';
 
 @Entity('expenses')
+@Index(['user_id', 'created_at'])
+@Index(['status'])
+@Index(['created_at'])
+@Index(['status', 'created_at'])
+@Index(['user_id', 'status'])
 export class Expense {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column({ type: 'uuid' })
   user_id: string;
 

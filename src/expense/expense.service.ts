@@ -919,4 +919,66 @@ export class ExpenseService {
     }
     await this.expenseRepository.remove(expense);
   }
+
+  /**
+   * Deducts an amount from the user's room rent expense liability.
+   * Called when a daily room expense is approved.
+   */
+  async deductRoomRent(
+    userId: string,
+    amount: number,
+    reason?: string,
+  ): Promise<{
+    adjustedExpenseId?: string;
+    previousTotal?: number;
+    newTotal?: number;
+    remainingRent?: number;
+  }> {
+    let expense = await this.expenseRepository.findOne({
+      where: [
+        { user_id: userId, status: ExpenseStatus.REMAINING },
+        { user_id: userId, status: ExpenseStatus.PENDING },
+      ],
+      order: { created_at: 'DESC' },
+    });
+
+    if (!expense) {
+      expense = await this.expenseRepository.findOne({
+        where: { user_id: userId },
+        order: { created_at: 'DESC' },
+      });
+    }
+
+    if (expense) {
+      const prevTotal = Number(expense.total_amount);
+      const newTotal = Math.max(0, prevTotal - amount);
+      expense.total_amount = newTotal;
+      expense.remaining_amount = Math.max(
+        0,
+        newTotal - Number(expense.paid_amount),
+      );
+
+      if (expense.remaining_amount === 0 && Number(expense.paid_amount) > 0) {
+        expense.status = ExpenseStatus.COMPLETE;
+      }
+
+      if (reason) {
+        expense.admin_note = expense.admin_note
+          ? `${expense.admin_note}\n[Room expense adjustment: -${amount} (${reason})]`
+          : `[Room expense adjustment: -${amount} (${reason})]`;
+      }
+
+      await this.expenseRepository.save(expense);
+
+      return {
+        adjustedExpenseId: expense.id,
+        previousTotal: prevTotal,
+        newTotal: newTotal,
+        remainingRent: expense.remaining_amount,
+      };
+    }
+
+    return {};
+  }
 }
+
