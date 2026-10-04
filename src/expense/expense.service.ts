@@ -949,6 +949,23 @@ export class ExpenseService {
       });
     }
 
+    if (!expense) {
+      // Fallback: If user has no personal expense record (e.g. Admin created room groceries),
+      // deduct from any active room expense with remaining/pending balance, or latest expense
+      expense = await this.expenseRepository.findOne({
+        where: [
+          { status: ExpenseStatus.REMAINING },
+          { status: ExpenseStatus.PENDING },
+        ],
+        order: { created_at: 'DESC' },
+      });
+      if (!expense) {
+        expense = await this.expenseRepository.findOne({
+          order: { created_at: 'DESC' },
+        });
+      }
+    }
+
     if (expense) {
       const prevTotal = Number(expense.total_amount);
       const newTotal = Math.max(0, prevTotal - amount);
@@ -969,6 +986,37 @@ export class ExpenseService {
       }
 
       await this.expenseRepository.save(expense);
+
+      // If the daily room grocery expense exceeds this user's personal room rent,
+      // deduct the excess amount from the flat's remaining room rent expenses
+      const excess = amount - prevTotal;
+      if (excess > 0) {
+        const otherExpenses = await this.expenseRepository.find({
+          order: { created_at: 'DESC' },
+        });
+        let leftover = excess;
+        for (const other of otherExpenses) {
+          if (other.id === expense.id || Number(other.total_amount) <= 0) continue;
+          const otherPrev = Number(other.total_amount);
+          const deductFromOther = Math.min(otherPrev, leftover);
+          other.total_amount = otherPrev - deductFromOther;
+          other.remaining_amount = Math.max(
+            0,
+            other.total_amount - Number(other.paid_amount),
+          );
+          if (other.remaining_amount === 0 && Number(other.paid_amount) > 0) {
+            other.status = ExpenseStatus.COMPLETE;
+          }
+          if (reason) {
+            other.admin_note = other.admin_note
+              ? `${other.admin_note}\n[Room grocery shared deduction: -${deductFromOther} (${reason})]`
+              : `[Room grocery shared deduction: -${deductFromOther} (${reason})]`;
+          }
+          await this.expenseRepository.save(other);
+          leftover -= deductFromOther;
+          if (leftover <= 0) break;
+        }
+      }
 
       return {
         adjustedExpenseId: expense.id,
