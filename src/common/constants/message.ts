@@ -13,6 +13,8 @@ export const USER_LOGIN_SUCCESS = 'User login successful';
 export const EMAIL_CHECKED_SUCCESS = 'Email status checked successfully';
 export const SUCCESS = 'Operation completed successfully';
 export const OPERATION_SUCCESS = 'Operation completed successfully';
+export const SETTING_FETCHED_SUCCESS = 'Setting fetched successfully';
+export const SETTING_UPDATED_SUCCESS = 'Setting updated successfully';
 
 /*
  * AUTHENTICATION & AUTHORIZATION ERROR MESSAGES

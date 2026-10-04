@@ -12,6 +12,28 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateExpenseDto {
   @ApiPropertyOptional({
+    example: "d9b2d63d-a233-4f25-b44e-123456789abc",
+    description: "Optional user ID (Admin only: assign expense to a specific user)",
+  })
+  @Expose()
+  @Transform(({ obj, value }) => {
+    const val = value !== undefined ? value : obj?.userId;
+    return val === "" || val === null ? undefined : val;
+  })
+  @IsOptional()
+  @IsUUID("4", { message: "user_id must be a valid UUID" })
+  user_id?: string;
+
+  @ApiPropertyOptional({
+    example: "d9b2d63d-a233-4f25-b44e-123456789abc",
+    description: "Alias for user_id",
+  })
+  @Expose()
+  @IsOptional()
+  @IsUUID("4", { message: "userId must be a valid UUID" })
+  userId?: string;
+
+  @ApiPropertyOptional({
     example: 6000,
     description:
       'Total amount of room rent or expense (also accepts "total"). Required for new expense, optional when paying towards remaining balance.',

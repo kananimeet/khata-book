@@ -8,10 +8,12 @@ import { AppService } from './app.service.js';
 import { User } from './user/entities/user.entity.js';
 import { Expense } from './expense/entities/expense.entity.js';
 import { ExpensePayment } from './expense/entities/expense-payment.entity.js';
+import { Setting } from './setting/entities/setting.entity.js';
 import { UserModule } from './user/user.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SeedModule } from './seed/seed.module.js';
 import { ExpenseModule } from './expense/expense.module.js';
+import { SettingModule } from './setting/setting.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -52,14 +54,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
             : false,
         connectionTimeoutMillis: 10000,
       },
-      entities: [User, Expense, ExpensePayment],
+      entities: [User, Expense, ExpensePayment, Setting],
       synchronize: true, // false in production
     }),
-    TypeOrmModule.forFeature([User, Expense, ExpensePayment]),
+    TypeOrmModule.forFeature([User, Expense, ExpensePayment, Setting]),
     UserModule,
     AuthModule,
     SeedModule,
     ExpenseModule,
+    SettingModule,
     ...(process.env.OBSERVE_APP_KEY &&
     process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
       ? [
