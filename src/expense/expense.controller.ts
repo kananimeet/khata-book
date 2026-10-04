@@ -73,8 +73,15 @@ export class ExpenseController {
     @CurrentUser() currentUser: { id: string; role: UserRole },
     @Body() createExpenseDto: CreateExpenseDto,
   ) {
+    // If Admin provides a target user_id, assign the expense to that user
+    const targetUserId =
+      currentUser.role === UserRole.ADMIN &&
+      (createExpenseDto.user_id || createExpenseDto.userId)
+        ? (createExpenseDto.user_id || createExpenseDto.userId)!
+        : currentUser.id;
+
     const expense = await this.expenseService.create(
-      currentUser.id,
+      targetUserId,
       createExpenseDto,
       currentUser.role,
     );

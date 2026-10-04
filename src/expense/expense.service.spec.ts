@@ -16,6 +16,7 @@ describe('ExpenseService', () => {
   let mockExpenseRepo: any;
   let mockPaymentRepo: any;
   let mockUserRepo: any;
+  let mockSettingService: any;
 
   beforeEach(() => {
     mockExpenseRepo = {
@@ -36,13 +37,20 @@ describe('ExpenseService', () => {
     };
 
     mockUserRepo = {
+      findOne: vi.fn(),
       createQueryBuilder: vi.fn(),
+    };
+
+    mockSettingService = {
+      getDefaultTotalAmount: vi.fn(() => Promise.resolve(6000)),
+      getSetting: vi.fn(() => Promise.resolve({ id: 'set-1', total_amount: 6000 })),
     };
 
     service = new ExpenseService(
       mockExpenseRepo,
       mockPaymentRepo,
       mockUserRepo,
+      mockSettingService,
     );
   });
 
@@ -475,6 +483,92 @@ describe('ExpenseService', () => {
         { userId: 'user-2' },
       );
       expect(result.items).toHaveLength(1);
+    });
+  });
+
+  describe('Setting integration and Admin user selection', () => {
+    it('should automatically use default total_amount from setting service when total_amount is omitted', async () => {
+      mockSettingService.getDefaultTotalAmount.mockResolvedValue(7500);
+      mockExpenseRepo.findOne
+        .mockResolvedValueOnce(null) // no remaining expense
+        .mockResolvedValueOnce({
+          id: 'exp-123',
+          user_id: 'user-1',
+          total_amount: 7500,
+          pay_amount: 5000,
+          status: ExpenseStatus.PENDING,
+          payments: [],
+        });
+
+      const result = await service.create(
+        'user-1',
+        {
+          pay_amount: 5000,
+          note: 'room pay',
+        },
+        UserRole.USER,
+      );
+
+      expect(mockSettingService.getDefaultTotalAmount).toHaveBeenCalled();
+      expect(mockExpenseRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          total_amount: 7500,
+          pay_amount: 5000,
+        }),
+      );
+      expect(result.total_amount).toBe(7500);
+    });
+
+    it('should allow Admin to create expense for a specified user when user_id is provided', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'user-target', name: 'Target User' });
+      mockExpenseRepo.findOne
+        .mockResolvedValueOnce(null) // no remaining expense for user-target
+        .mockResolvedValueOnce({
+          id: 'exp-target',
+          user_id: 'user-target',
+          total_amount: 6000,
+          pay_amount: 3000,
+          status: ExpenseStatus.PENDING,
+          payments: [],
+        });
+
+      const result = await service.create(
+        'admin-1',
+        {
+          user_id: 'user-target',
+          total_amount: 6000,
+          pay_amount: 3000,
+          note: 'room pay by admin',
+        },
+        UserRole.ADMIN,
+      );
+
+      expect(mockUserRepo.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-target' },
+      });
+      expect(mockExpenseRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          user_id: 'user-target',
+          total_amount: 6000,
+        }),
+      );
+      expect(result.user_id).toBe('user-target');
+    });
+
+    it('should throw NotFoundException if Admin creates expense for a non-existent user_id', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          'admin-1',
+          {
+            user_id: 'non-existent-user',
+            total_amount: 6000,
+            pay_amount: 3000,
+          },
+          UserRole.ADMIN,
+        ),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

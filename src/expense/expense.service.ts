@@ -32,7 +32,9 @@ import {
   EXPENSE_PREVIOUS_PAYMENT_PENDING,
   EXPENSE_INITIAL_REQUEST_PENDING,
   FORBIDDEN,
+  USER_NOT_FOUND,
 } from '../common/message.js';
+import { SettingService } from '../setting/setting.service.js';
 
 @Injectable()
 export class ExpenseService {
@@ -43,6 +45,7 @@ export class ExpenseService {
     private readonly paymentRepository: Repository<ExpensePayment>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly settingService: SettingService,
   ) {}
 
   /**
@@ -55,6 +58,17 @@ export class ExpenseService {
     createDto: CreateExpenseDto,
     userRole: UserRole = UserRole.USER,
   ): Promise<Expense> {
+    if (userRole === UserRole.ADMIN && (createDto.user_id || createDto.userId)) {
+      const targetUserId = (createDto.user_id || createDto.userId)!;
+      const targetUser = await this.userRepository.findOne({
+        where: { id: targetUserId },
+      });
+      if (!targetUser) {
+        throw new NotFoundException(USER_NOT_FOUND(targetUserId));
+      }
+      userId = targetUserId;
+    }
+
     const payAmount = Number(
       createDto.pay_amount ?? createDto.pay ?? createDto.amount,
     );
@@ -99,13 +113,16 @@ export class ExpenseService {
       );
     }
 
-    if (!effectiveTotal) {
-      throw new BadRequestException(
-        'total_amount is required when creating a new expense',
-      );
+    let totalAmount: number;
+    if (
+      effectiveTotal !== undefined &&
+      effectiveTotal !== null &&
+      !isNaN(Number(effectiveTotal))
+    ) {
+      totalAmount = Number(effectiveTotal);
+    } else {
+      totalAmount = await this.settingService.getDefaultTotalAmount();
     }
-
-    const totalAmount = Number(effectiveTotal);
 
     if (payAmount > totalAmount) {
       throw new BadRequestException(EXPENSE_PAY_GREATER_THAN_TOTAL);
