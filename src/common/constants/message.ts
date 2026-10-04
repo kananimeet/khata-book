@@ -103,3 +103,32 @@ export const EXPENSE_INITIAL_REQUEST_PENDING =
   'The initial expense request is still pending admin approval. Please wait for admin approval before submitting subsequent payments.';
 export const EXPENSE_TOTAL_LIST_FETCHED_SUCCESS =
   'User total amounts fetched successfully';
+
+/*
+ * DAILY EXPENSE MESSAGES
+ */
+export const DAILY_EXPENSE_CREATED_SUCCESS =
+  'Daily expense request created successfully';
+export const DAILY_EXPENSE_UPDATED_SUCCESS =
+  'Daily expense updated successfully';
+export const DAILY_EXPENSE_FETCHED_SUCCESS =
+  'Daily expense fetched successfully';
+export const DAILY_EXPENSES_FETCHED_SUCCESS =
+  'Daily expenses fetched successfully';
+export const DAILY_EXPENSE_DELETED_SUCCESS =
+  'Daily expense deleted successfully';
+export const DAILY_EXPENSE_APPROVED_SUCCESS =
+  'Daily expense request approved successfully';
+export const DAILY_EXPENSE_REJECTED_SUCCESS =
+  'Daily expense request rejected successfully';
+export const DAILY_EXPENSE_NOT_FOUND = 'Daily expense not found';
+export const DAILY_EXPENSE_USER_NOT_ALLOWED_TO_EDIT =
+  'Users can only edit their own pending daily expense requests. Approved or rejected requests cannot be edited.';
+export const DAILY_EXPENSE_NOT_PENDING =
+  'Cannot edit or delete this expense request as it has already been processed.';
+export const DAILY_EXPENSE_ALREADY_APPROVED =
+  'This daily expense request has already been approved.';
+export const DAILY_EXPENSE_CHART_FETCHED_SUCCESS =
+  'Daily and monthly expense chart data fetched successfully';
+
+
