@@ -121,11 +121,7 @@ export class DailyExpenseService {
       targetQb: SelectQueryBuilder<DailyExpense>,
       isItems = false,
     ) => {
-      if (currentUser.role === UserRole.USER) {
-        targetQb.andWhere('daily.user_id = :currentUserId', {
-          currentUserId: currentUser.id,
-        });
-      } else if (query.user_id) {
+      if (query.user_id && query.user_id !== 'all') {
         targetQb.andWhere('daily.user_id = :filterUserId', {
           filterUserId: query.user_id,
         });
@@ -251,12 +247,7 @@ export class DailyExpenseService {
       throw new NotFoundException(DAILY_EXPENSE_NOT_FOUND);
     }
 
-    if (
-      currentUser.role === UserRole.USER &&
-      expense.user_id !== currentUser.id
-    ) {
-      throw new ForbiddenException(FORBIDDEN);
-    }
+    // Any authenticated roommate or admin can view expense details
 
     return expense;
   }
@@ -443,9 +434,7 @@ export class DailyExpenseService {
         'daily.status',
       ]);
 
-    if (currentUser.role === UserRole.USER) {
-      qb.andWhere('daily.user_id = :userId', { userId: currentUser.id });
-    } else if (query.user_id) {
+    if (query.user_id && query.user_id !== 'all') {
       qb.andWhere('daily.user_id = :userId', { userId: query.user_id });
     }
 
