@@ -4,10 +4,15 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { UserRole } from '../../common/enums/role.enum.js';
 
 @Entity('users')
+@Index(['role'])
+@Index(['is_active'])
+@Index(['created_at'])
+@Index(['role', 'is_active'])
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,3 +1,4 @@
+import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,17 +10,28 @@ import { TryCatchInterceptor } from './common/interceptors/try-catch.interceptor
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    instrument: ObserveInstrument,
-  });
+  const isObserveEnabled = Boolean(
+    process.env.OBSERVE_APP_KEY &&
+      process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY',
+  );
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    isObserveEnabled ? { instrument: ObserveInstrument } : {},
+  );
 
-  const uploadsPath = join(process.cwd(), 'uploads');
-  if (!existsSync(uploadsPath)) {
-    mkdirSync(uploadsPath, { recursive: true });
+  app.use(compression());
+
+  try {
+    const uploadsPath = join(process.cwd(), 'uploads');
+    if (!existsSync(uploadsPath)) {
+      mkdirSync(uploadsPath, { recursive: true });
+    }
+    app.useStaticAssets(uploadsPath, {
+      prefix: '/uploads/',
+    });
+  } catch {
+    // Ignore read-only filesystem errors in serverless environments
   }
-  app.useStaticAssets(uploadsPath, {
-    prefix: '/uploads/',
-  });
 
   app.enableCors({ origin: true, credentials: true });
   app.setGlobalPrefix('api/v1');
@@ -27,8 +39,11 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 

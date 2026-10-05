@@ -1,6 +1,13 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsString, Min, IsBoolean } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  IsBoolean,
+} from 'class-validator';
 import { UserRole } from '../../common/enums/role.enum.js';
 
 export class QueryUserDto {

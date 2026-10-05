@@ -5,13 +5,23 @@ import { BadRequestException } from '@nestjs/common';
 import type { MulterOptions } from '@nestjs/platform-express/multer/interfaces/multer-options.interface.js';
 
 export const USER_UPLOAD_DIR = join(process.cwd(), 'uploads', 'users');
+export const DAILY_EXPENSE_UPLOAD_DIR = join(
+  process.cwd(),
+  'uploads',
+  'daily-expenses',
+);
+
+// Ensure upload directories exist once at bootstrap to eliminate disk I/O on every request
+if (!existsSync(USER_UPLOAD_DIR)) {
+  mkdirSync(USER_UPLOAD_DIR, { recursive: true });
+}
+if (!existsSync(DAILY_EXPENSE_UPLOAD_DIR)) {
+  mkdirSync(DAILY_EXPENSE_UPLOAD_DIR, { recursive: true });
+}
 
 export const userProfilePictureUploadOptions: MulterOptions = {
   storage: diskStorage({
     destination: (_req, _file, cb) => {
-      if (!existsSync(USER_UPLOAD_DIR)) {
-        mkdirSync(USER_UPLOAD_DIR, { recursive: true });
-      }
       cb(null, USER_UPLOAD_DIR);
     },
     filename: (_req, file, cb) => {
@@ -37,3 +47,30 @@ export const userProfilePictureUploadOptions: MulterOptions = {
 };
 
 export const userPhotoUploadOptions = userProfilePictureUploadOptions;
+
+export const dailyExpensePhotoUploadOptions: MulterOptions = {
+  storage: diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, DAILY_EXPENSE_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      const ext = extname(file.originalname).toLowerCase();
+      cb(null, `expense-${uniqueSuffix}${ext}`);
+    },
+  }),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.match(/\/(jpg|jpeg|png|webp|gif|pdf)$/i)) {
+      return cb(
+        new BadRequestException(
+          'Invalid file type. Only JPG, JPEG, PNG, WEBP, GIF, and PDF files are allowed.',
+        ),
+        false,
+      );
+    }
+    cb(null, true);
+  },
+};

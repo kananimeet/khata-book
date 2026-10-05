@@ -43,13 +43,15 @@ import {
 @ApiBearerAuth()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @UseInterceptors(FileInterceptor('profile_picture', userProfilePictureUploadOptions))
+  @UseInterceptors(
+    FileInterceptor('profile_picture', userProfilePictureUploadOptions),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Create user (Admin only with multipart/form-data)',
@@ -82,7 +84,10 @@ export class UserController {
   ) {
     if (file) {
       createUserDto.profile_picture = `/uploads/users/${file.filename}`;
-    } else if (createUserDto.profile_picture === '' || typeof createUserDto.profile_picture !== 'string') {
+    } else if (
+      createUserDto.profile_picture === '' ||
+      typeof createUserDto.profile_picture !== 'string'
+    ) {
       createUserDto.profile_picture = undefined;
     }
     const user = await this.userService.create(createUserDto);
@@ -97,7 +102,8 @@ export class UserController {
   @Roles(UserRole.ADMIN, UserRole.USER)
   @ApiOperation({
     summary: 'List users',
-    description: 'Retrieve a paginated list of users with optional filtering and search.',
+    description:
+      'Retrieve a paginated list of users with optional filtering and search.',
   })
   @ApiResponse({
     status: 200,
@@ -153,11 +159,14 @@ export class UserController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('profile_picture', userProfilePictureUploadOptions))
+  @UseInterceptors(
+    FileInterceptor('profile_picture', userProfilePictureUploadOptions),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user (multipart/form-data)',
-    description: 'Update user details by ID with optional profile picture file upload.',
+    description:
+      'Update user details by ID with optional profile picture file upload.',
   })
   @ApiParam({
     name: 'id',
@@ -192,7 +201,10 @@ export class UserController {
   ) {
     if (file) {
       updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
-    } else if (updateUserDto.profile_picture === '' || typeof updateUserDto.profile_picture !== 'string') {
+    } else if (
+      updateUserDto.profile_picture === '' ||
+      typeof updateUserDto.profile_picture !== 'string'
+    ) {
       updateUserDto.profile_picture = undefined;
     }
     const user = await this.userService.update(id, updateUserDto);
@@ -204,11 +216,14 @@ export class UserController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('profile_picture', userProfilePictureUploadOptions))
+  @UseInterceptors(
+    FileInterceptor('profile_picture', userProfilePictureUploadOptions),
+  )
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Update user (PUT with multipart/form-data)',
-    description: 'Update user details by ID with optional profile picture file upload.',
+    description:
+      'Update user details by ID with optional profile picture file upload.',
   })
   @ApiParam({
     name: 'id',
@@ -243,7 +258,10 @@ export class UserController {
   ) {
     if (file) {
       updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
-    } else if (updateUserDto.profile_picture === '' || typeof updateUserDto.profile_picture !== 'string') {
+    } else if (
+      updateUserDto.profile_picture === '' ||
+      typeof updateUserDto.profile_picture !== 'string'
+    ) {
       updateUserDto.profile_picture = undefined;
     }
     const user = await this.userService.update(id, updateUserDto);
