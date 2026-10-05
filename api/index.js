@@ -1,4 +1,5 @@
 import 'pg';
+import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { TryCatchInterceptor } from '../dist/common/interceptors/try-catch.inter
 import { ResponseInterceptor } from '../dist/common/interceptors/response.interceptor.js';
 
 const server = express();
+server.use(compression());
 let isAppInitialized = false;
 
 async function bootstrap() {

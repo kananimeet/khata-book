@@ -665,7 +665,7 @@ export class DailyExpenseService {
       }))
       .sort((a, b) => b.total - a.total);
 
-    const categoryBreakdown = monthCategoryBreakdown;
+    const categoryBreakdown = yearCategoryBreakdown;
 
     // Round values in daily and monthly trends
     for (const d of dailyTrend) {

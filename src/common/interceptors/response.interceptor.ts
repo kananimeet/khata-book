@@ -27,9 +27,16 @@ export class ResponseInterceptor<T> implements NestInterceptor<
   ): Observable<ResponseFormat<T>> {
     const httpContext = context.switchToHttp();
     const response = httpContext.getResponse();
+    const startTime = performance.now();
 
     return next.handle().pipe(
       map((resData) => {
+        const duration = Math.round((performance.now() - startTime) * 100) / 100;
+        if (response && typeof response.setHeader === 'function') {
+          response.setHeader('X-Response-Time', `${duration}ms`);
+          response.setHeader('Server-Timing', `total;dur=${duration}`);
+        }
+
         const statusCode = response.statusCode;
         let message = SUCCESS;
         let data = resData;

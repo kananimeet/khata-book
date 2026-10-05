@@ -327,6 +327,7 @@ describe('ExpenseService', () => {
     it('should show total = 0 when pending, and total = 5000 when approved', async () => {
       // Mock user query
       const mockUserQb: any = {
+        select: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         andWhere: vi.fn().mockReturnThis(),
         orderBy: vi.fn().mockReturnThis(),

@@ -154,13 +154,13 @@ describe('DailyExpenseService', () => {
       mockDailyExpenseRepo.createQueryBuilder.mockReturnValue(mockQb);
 
       const res = await service.findAll(
-        { page: 1, limit: 10 },
+        { page: 1, limit: 10, user_id: 'user-1' },
         { id: 'user-1', role: UserRole.USER },
       );
 
       expect(mockQb.andWhere).toHaveBeenCalledWith(
-        'daily.user_id = :currentUserId',
-        { currentUserId: 'user-1' },
+        'daily.user_id = :filterUserId',
+        { filterUserId: 'user-1' },
       );
       expect(res.summary.totalAmount).toBe(800);
       expect(res.summary.totalRoomAmount).toBe(500);

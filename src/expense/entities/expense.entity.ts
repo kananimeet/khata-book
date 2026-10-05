@@ -21,6 +21,7 @@ import { ExpensePayment } from './expense-payment.entity.js';
 @Index(['created_at'])
 @Index(['status', 'created_at'])
 @Index(['user_id', 'status'])
+@Index(['user_id', 'status', 'created_at'])
 export class Expense {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -29,7 +30,7 @@ export class Expense {
   @Column({ type: 'uuid' })
   user_id: string;
 
-  @ManyToOne(() => User, { eager: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: Relation<User>;
 
