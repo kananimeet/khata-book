@@ -637,7 +637,15 @@ export class ExpenseService {
 
     const qb: SelectQueryBuilder<Expense> = this.expenseRepository
       .createQueryBuilder('expense')
-      .leftJoinAndSelect('expense.user', 'user')
+      .leftJoin('expense.user', 'user')
+      .addSelect([
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.mobile',
+        'user.profile_picture',
+        'user.role',
+      ])
       .leftJoinAndSelect('expense.payments', 'payments');
 
     // Filter by specific user_id if requested
@@ -671,10 +679,7 @@ export class ExpenseService {
     qb.orderBy('expense.created_at', 'DESC');
     qb.skip(skip).take(limit);
 
-    const [items, total] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(total / limit);
-
-    // Compute summary totals for all matching records
+    // Compute summary totals for all matching records concurrently
     const summaryQb = this.expenseRepository
       .createQueryBuilder('expense')
       .leftJoin('expense.user', 'user');
@@ -706,15 +711,21 @@ export class ExpenseService {
       summaryQb.andWhere('expense.created_at <= :endDate', { endDate: end });
     }
 
-    const rawSummary = await summaryQb
-      .select('SUM(expense.total_amount)', 'totalRoomRate')
-      .addSelect('SUM(expense.paid_amount)', 'totalApproved')
-      .addSelect('SUM(expense.remaining_amount)', 'totalRemaining')
-      .addSelect(
-        "SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END)",
-        'totalPending',
-      )
-      .getRawOne();
+    const [itemsAndCount, rawSummary] = await Promise.all([
+      qb.getManyAndCount(),
+      summaryQb
+        .select('SUM(expense.total_amount)', 'totalRoomRate')
+        .addSelect('SUM(expense.paid_amount)', 'totalApproved')
+        .addSelect('SUM(expense.remaining_amount)', 'totalRemaining')
+        .addSelect(
+          "SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END)",
+          'totalPending',
+        )
+        .getRawOne(),
+    ]);
+
+    const [items, total] = itemsAndCount;
+    const totalPages = Math.ceil(total / limit);
 
     const summary = {
       totalRoomRateAmount: Number(rawSummary?.totalRoomRate || 0),
@@ -748,6 +759,16 @@ export class ExpenseService {
     search?: string,
   ) {
     const userQb = this.userRepository.createQueryBuilder('user');
+    if (typeof userQb.select === 'function') {
+      userQb.select([
+        'user.id',
+        'user.name',
+        'user.email',
+        'user.mobile',
+        'user.profile_picture',
+        'user.role',
+      ]);
+    }
 
     // Normal users only see their own summary; Admin sees all non-admin users
     if (currentUser.role === UserRole.USER) {
@@ -992,7 +1013,12 @@ export class ExpenseService {
       const excess = amount - prevTotal;
       if (excess > 0) {
         const otherExpenses = await this.expenseRepository.find({
+          where: [
+            { status: ExpenseStatus.REMAINING },
+            { status: ExpenseStatus.PENDING },
+          ],
           order: { created_at: 'DESC' },
+          take: 50,
         });
         let leftover = excess;
         for (const other of otherExpenses) {

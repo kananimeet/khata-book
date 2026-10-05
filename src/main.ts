@@ -1,3 +1,4 @@
+import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -9,9 +10,16 @@ import { TryCatchInterceptor } from './common/interceptors/try-catch.interceptor
 import { ResponseInterceptor } from './common/interceptors/response.interceptor.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    instrument: ObserveInstrument,
-  });
+  const isObserveEnabled = Boolean(
+    process.env.OBSERVE_APP_KEY &&
+      process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY',
+  );
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+    isObserveEnabled ? { instrument: ObserveInstrument } : {},
+  );
+
+  app.use(compression());
 
   try {
     const uploadsPath = join(process.cwd(), 'uploads');

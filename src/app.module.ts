@@ -36,7 +36,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
             ).replace(/\?$/, ''),
           }
         : {
-            host: process.env.DB_HOST || 'localhost',
+            host: process.env.DB_HOST || '127.0.0.1',
             port: parseInt(process.env.DB_PORT || '5432', 10),
             username:
               process.env.DB_USERNAME || process.env.DB_USER || 'postgres',
@@ -54,10 +54,18 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
                 rejectUnauthorized: false,
               }
             : false,
-        connectionTimeoutMillis: 10000,
+        max: parseInt(process.env.DB_POOL_MAX || '25', 10),
+        min: parseInt(process.env.DB_POOL_MIN || '4', 10),
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 5000,
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 10000,
       },
       entities: [User, Expense, ExpensePayment, Setting, DailyExpense],
-      synchronize: true, // false in production
+      synchronize:
+        process.env.DB_SYNCHRONIZE === 'false'
+          ? false
+          : process.env.NODE_ENV !== 'production',
     }),
     TypeOrmModule.forFeature([
       User,
