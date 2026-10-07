@@ -45,6 +45,9 @@ export class User {
   @Column({ type: 'boolean', default: false })
   has_login: boolean;
 
+  @Column({ type: 'text', nullable: true })
+  fcm_token?: string;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

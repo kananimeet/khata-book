@@ -1,5 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EMAIL_INVALID,
   EMAIL_REQUIRED,
@@ -23,4 +23,12 @@ export class AdminLoginDto {
   @IsString({ message: PASSWORD_STRING })
   @IsNotEmpty({ message: PASSWORD_REQUIRED })
   password: string;
+
+  @ApiPropertyOptional({
+    example: 'f1x9AB...k8L0Q',
+    description: 'Optional FCM device token to automatically register on login',
+  })
+  @IsOptional()
+  @IsString({ message: 'fcm_token must be a string' })
+  fcm_token?: string;
 }

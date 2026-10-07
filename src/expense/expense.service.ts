@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -35,6 +36,8 @@ import {
   USER_NOT_FOUND,
 } from '../common/message.js';
 import { SettingService } from '../setting/setting.service.js';
+import { NotificationService } from '../notification/notification.service.js';
+import { NotificationType } from '../notification/entities/notification.entity.js';
 
 @Injectable()
 export class ExpenseService {
@@ -46,6 +49,8 @@ export class ExpenseService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly settingService: SettingService,
+    @Optional()
+    private readonly notificationService?: NotificationService,
   ) {}
 
   /**
@@ -124,6 +129,14 @@ export class ExpenseService {
       totalAmount = await this.settingService.getDefaultTotalAmount();
     }
 
+    if (totalAmount <= 0) {
+      throw new BadRequestException('Total room rent amount must be greater than 0');
+    }
+
+    if (payAmount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than 0');
+    }
+
     if (payAmount > totalAmount) {
       throw new BadRequestException(EXPENSE_PAY_GREATER_THAN_TOTAL);
     }
@@ -154,7 +167,25 @@ export class ExpenseService {
 
     await this.paymentRepository.save(payment);
 
-    return this.findById(savedExpense.id, { id: userId, role: userRole });
+    const result = await this.findById(savedExpense.id, { id: userId, role: userRole });
+
+    // Notify all active users that a request has been created
+    const userName = result.user?.name || 'A user';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'New Room Rent Payment Request',
+      body: `${userName} submitted a payment request of ₹${payAmount} (${note}).`,
+      type: NotificationType.EXPENSE_REQUEST,
+      data: {
+        expense_id: savedExpense.id,
+        user_id: userId,
+        user_name: userName,
+        amount: payAmount,
+        status: ExpenseStatus.PENDING,
+      },
+      link: '/expenses',
+    }).catch(() => {});
+
+    return result;
   }
 
   /**
@@ -229,10 +260,29 @@ export class ExpenseService {
       pay_amount: payAmount,
     });
 
-    return this.findById(expense.id, {
+    const result = await this.findById(expense.id, {
       id: userId,
       role: isAdmin ? UserRole.ADMIN : UserRole.USER,
     });
+
+    // Notify all active users that an installment payment request has been created
+    const userName = result.user?.name || 'A user';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'New Installment Payment Request',
+      body: `${userName} submitted an installment payment request of ₹${payAmount}.`,
+      type: NotificationType.EXPENSE_PAYMENT_REQUEST,
+      data: {
+        expense_id: expense.id,
+        payment_id: payment.id,
+        user_id: userId,
+        user_name: userName,
+        amount: payAmount,
+        status: ExpensePaymentStatus.PENDING,
+      },
+      link: '/expenses',
+    }).catch(() => {});
+
+    return result;
   }
 
   /**
@@ -311,10 +361,29 @@ export class ExpenseService {
 
     await this.expenseRepository.save(expense);
 
-    return this.findById(expense.id, {
+    const result = await this.findById(expense.id, {
       id: expense.user_id,
       role: UserRole.ADMIN,
     });
+
+    // Notify all active users that admin approved the request
+    const targetUserName = result.user?.name || 'User';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'Room Rent Request Approved',
+      body: `Admin approved room rent request for ${targetUserName}. Paid: ₹${expense.paid_amount}, Remaining: ₹${expense.remaining_amount}. Status is ${expense.status}.`,
+      type: NotificationType.EXPENSE_APPROVED,
+      data: {
+        expense_id: expense.id,
+        user_id: expense.user_id,
+        user_name: targetUserName,
+        status: expense.status,
+        paid_amount: expense.paid_amount,
+        remaining_amount: expense.remaining_amount,
+      },
+      link: '/expenses',
+    }).catch(() => {});
+
+    return result;
   }
 
   /**
@@ -438,10 +507,28 @@ export class ExpenseService {
       await this.expenseRepository.save(expense);
     }
 
-    return this.findById(payment.expense_id, {
+    const result = await this.findById(payment.expense_id, {
       id: payment.user_id,
       role: UserRole.ADMIN,
     });
+
+    // Notify all active users that admin approved installment payment
+    const targetUserName = result.user?.name || 'User';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'Installment Payment Approved',
+      body: `Admin approved installment payment of ₹${payment.amount} for ${targetUserName}.`,
+      type: NotificationType.EXPENSE_PAYMENT_APPROVED,
+      data: {
+        expense_id: payment.expense_id,
+        payment_id: payment.id,
+        user_id: payment.user_id,
+        user_name: targetUserName,
+        amount: payment.amount,
+      },
+      link: '/expenses',
+    }).catch(() => {});
+
+    return result;
   }
 
   /**
@@ -714,11 +801,17 @@ export class ExpenseService {
     const [itemsAndCount, rawSummary] = await Promise.all([
       qb.getManyAndCount(),
       summaryQb
-        .select('SUM(expense.total_amount)', 'totalRoomRate')
-        .addSelect('SUM(expense.paid_amount)', 'totalApproved')
-        .addSelect('SUM(expense.remaining_amount)', 'totalRemaining')
+        .select(
+          "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.total_amount ELSE 0 END), 0)",
+          'totalRoomRate',
+        )
+        .addSelect('COALESCE(SUM(expense.paid_amount), 0)', 'totalApproved')
         .addSelect(
-          "SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END)",
+          "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.remaining_amount ELSE 0 END), 0)",
+          'totalRemaining',
+        )
+        .addSelect(
+          "COALESCE(SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END), 0)",
           'totalPending',
         )
         .getRawOne(),
@@ -842,16 +935,18 @@ export class ExpenseService {
         const remaining = Number(exp.remaining_amount);
         const requested = Number(exp.pay_amount);
 
-        totalRoomRate += total;
-        totalApproved += approved; // Only approved counts toward total!
-        totalRemaining += remaining;
-
         if (exp.status === ExpenseStatus.PENDING) {
           totalPending += requested;
           pendingCount++;
         } else if (exp.status === ExpenseStatus.REMAINING) {
+          totalRoomRate += total;
+          totalApproved += approved;
+          totalRemaining += remaining;
           remainingCount++;
         } else if (exp.status === ExpenseStatus.COMPLETE) {
+          totalRoomRate += total;
+          totalApproved += approved;
+          totalRemaining += remaining;
           completeCount++;
         } else if (exp.status === ExpenseStatus.REJECTED) {
           rejectedCount++;

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -30,6 +31,8 @@ import {
   FORBIDDEN,
   USER_NOT_FOUND,
 } from '../common/message.js';
+import { NotificationService } from '../notification/notification.service.js';
+import { NotificationType } from '../notification/entities/notification.entity.js';
 
 @Injectable()
 export class DailyExpenseService {
@@ -39,6 +42,8 @@ export class DailyExpenseService {
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     private readonly expenseService: ExpenseService,
+    @Optional()
+    private readonly notificationService?: NotificationService,
   ) {}
 
   /**
@@ -95,6 +100,24 @@ export class DailyExpenseService {
           profile_picture: true,
         },
       })) as User);
+
+    // Notify all active users that daily expense was created
+    const creatorName = saved.user?.name || 'A user';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'New Daily Expense Request',
+      body: `${creatorName} submitted daily expense of ₹${saved.amount} (${saved.category}).`,
+      type: NotificationType.DAILY_EXPENSE_REQUEST,
+      data: {
+        daily_expense_id: saved.id,
+        user_id: saved.user_id,
+        user_name: creatorName,
+        amount: saved.amount,
+        category: saved.category,
+        status: saved.status,
+      },
+      link: '/daily-expenses',
+    }).catch(() => {});
+
     return saved;
   }
 
@@ -174,8 +197,10 @@ export class DailyExpenseService {
     summaryQb.select([
       'COUNT(daily.id) as "totalCount"',
       'COALESCE(SUM(daily.amount), 0) as "totalAmount"',
-      `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' THEN daily.amount ELSE 0 END), 0) as "totalRoomAmount"`,
-      `COALESCE(SUM(CASE WHEN daily.expense_type = 'own' THEN daily.amount ELSE 0 END), 0) as "totalOwnAmount"`,
+      `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalRoomAmount"`,
+      `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedRoomAmount"`,
+      `COALESCE(SUM(CASE WHEN daily.expense_type = 'own' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalOwnAmount"`,
+      `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedTotalAmount"`,
       `COALESCE(SUM(CASE WHEN daily.status = 'PENDING' THEN 1 ELSE 0 END), 0) as "pendingCount"`,
       `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN 1 ELSE 0 END), 0) as "approvedCount"`,
       `COALESCE(SUM(CASE WHEN daily.status = 'REJECTED' THEN 1 ELSE 0 END), 0) as "rejectedCount"`,
@@ -199,15 +224,19 @@ export class DailyExpenseService {
     if (!summaryRaw && items.length > 0) {
       for (const item of items) {
         const amt = Number(item.amount) || 0;
-        totalAmount += amt;
-        if (item.expense_type === DailyExpenseType.ROOM) {
-          totalRoomAmount += amt;
-        } else {
-          totalOwnAmount += amt;
+        if (item.status === DailyExpenseStatus.APPROVED) {
+          totalAmount += amt;
+          if (item.expense_type === DailyExpenseType.ROOM) {
+            totalRoomAmount += amt;
+          } else {
+            totalOwnAmount += amt;
+          }
+          approvedCount++;
+        } else if (item.status === DailyExpenseStatus.PENDING) {
+          pendingCount++;
+        } else if (item.status === DailyExpenseStatus.REJECTED) {
+          rejectedCount++;
         }
-        if (item.status === DailyExpenseStatus.PENDING) pendingCount++;
-        else if (item.status === DailyExpenseStatus.APPROVED) approvedCount++;
-        else if (item.status === DailyExpenseStatus.REJECTED) rejectedCount++;
       }
     }
 
@@ -222,6 +251,7 @@ export class DailyExpenseService {
       summary: {
         totalAmount: Number(totalAmount.toFixed(2)),
         totalRoomAmount: Number(totalRoomAmount.toFixed(2)),
+        approvedRoomAmount: Number(totalRoomAmount.toFixed(2)),
         totalOwnAmount: Number(totalOwnAmount.toFixed(2)),
         totalCount: total,
         pendingCount,
@@ -356,6 +386,24 @@ export class DailyExpenseService {
     }
 
     await this.dailyExpenseRepository.save(expense);
+
+    // Notify all active users that daily expense was approved by Admin
+    const targetUserName = expense.user?.name || 'User';
+    this.notificationService?.sendNotificationToAllActiveUsers({
+      title: 'Daily Expense Approved',
+      body: `Admin approved daily expense of ₹${expense.amount} (${expense.category}) for ${targetUserName}.`,
+      type: NotificationType.DAILY_EXPENSE_APPROVED,
+      data: {
+        daily_expense_id: expense.id,
+        user_id: expense.user_id,
+        user_name: targetUserName,
+        amount: expense.amount,
+        category: expense.category,
+        status: expense.status,
+      },
+      link: '/daily-expenses',
+    }).catch(() => {});
+
     return expense;
   }
 
