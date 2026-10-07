@@ -10,12 +10,14 @@ import { Expense } from './expense/entities/expense.entity.js';
 import { ExpensePayment } from './expense/entities/expense-payment.entity.js';
 import { Setting } from './setting/entities/setting.entity.js';
 import { DailyExpense } from './daily-expense/entities/daily-expense.entity.js';
+import { Notification } from './notification/entities/notification.entity.js';
 import { UserModule } from './user/user.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { SeedModule } from './seed/seed.module.js';
 import { ExpenseModule } from './expense/expense.module.js';
 import { SettingModule } from './setting/setting.module.js';
 import { DailyExpenseModule } from './daily-expense/daily-expense.module.js';
+import { NotificationModule } from './notification/notification.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -61,7 +63,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
         keepAlive: true,
         keepAliveInitialDelayMillis: 10000,
       },
-      entities: [User, Expense, ExpensePayment, Setting, DailyExpense],
+      entities: [User, Expense, ExpensePayment, Setting, DailyExpense, Notification],
       synchronize:
         process.env.DB_SYNCHRONIZE === 'false'
           ? false
@@ -73,6 +75,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       ExpensePayment,
       Setting,
       DailyExpense,
+      Notification,
     ]),
     UserModule,
     AuthModule,
@@ -80,6 +83,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     ExpenseModule,
     SettingModule,
     DailyExpenseModule,
+    NotificationModule,
     ...(process.env.OBSERVE_APP_KEY &&
     process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
       ? [

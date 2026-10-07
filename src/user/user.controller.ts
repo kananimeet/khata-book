@@ -26,10 +26,12 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UserService } from './user.service.js';
 import { CreateUserDto } from './dto/create-user.dto.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
+import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto.js';
 import { QueryUserDto } from './dto/query-user.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { UserRole } from '../common/enums/role.enum.js';
 import { userProfilePictureUploadOptions } from '../helper/multer.helper.js';
 import {
@@ -154,6 +156,34 @@ export class UserController {
     return {
       message: USER_FETCHED_SUCCESS,
       data: user,
+    };
+  }
+
+  @Patch('fcm-token')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Update current user FCM device token for push notifications',
+    description:
+      'Store or update the FCM web push token for the authenticated user.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'FCM token updated successfully',
+  })
+  async updateFcmToken(
+    @CurrentUser() currentUser: { id: string },
+    @Body() dto: UpdateFcmTokenDto,
+  ) {
+    const user = await this.userService.updateFcmToken(
+      currentUser.id,
+      dto.fcm_token,
+    );
+    return {
+      message: 'FCM token updated successfully',
+      data: {
+        id: user.id,
+        fcm_token: user.fcm_token,
+      },
     };
   }
 

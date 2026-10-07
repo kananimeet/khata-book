@@ -80,7 +80,8 @@ export class CreateExpenseDto {
   })
   @IsNotEmpty({ message: 'pay_amount should not be empty' })
   @IsNumber({}, { message: 'pay_amount must be a valid number' })
-  @Min(0, { message: 'pay_amount must be 0 or greater' })
+  @IsPositive({ message: 'pay_amount must be greater than 0' })
+  @Min(1, { message: 'pay_amount must be greater than 0' })
   pay_amount: number;
 
   @ApiPropertyOptional({

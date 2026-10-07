@@ -87,4 +87,12 @@ export class UpdateUserDto {
   })
   @IsBoolean({ message: 'has_login must be a boolean' })
   has_login?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'dK9...',
+    description: 'FCM device token for push notifications',
+  })
+  @IsOptional()
+  @IsString({ message: 'fcm_token must be a string' })
+  fcm_token?: string;
 }

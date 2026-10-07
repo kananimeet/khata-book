@@ -184,4 +184,20 @@ export class UserService {
     const { password: _password, ...result } = savedUser;
     return result as User;
   }
+
+  async updateFcmToken(id: string, fcmToken: string): Promise<User> {
+    const user = await this.findById(id);
+    if (!user) {
+      throw new NotFoundException(USER_NOT_FOUND(id));
+    }
+    user.fcm_token = fcmToken;
+    const saved = await this.userRepository.save(user);
+    const { password: _password, ...result } = saved;
+    return result as User;
+  }
+
+  async clearFcmToken(fcmToken: string): Promise<void> {
+    if (!fcmToken) return;
+    await this.userRepository.update({ fcm_token: fcmToken }, { fcm_token: undefined as any });
+  }
 }
