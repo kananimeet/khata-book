@@ -64,6 +64,21 @@ export default async function handler(req, res) {
       await bootstrap();
       console.log('[Vercel Function] NestJS App Initialized successfully!');
     }
+
+    // Auto-prefix /api/v1 if client called without it (e.g. /auth/check-email -> /api/v1/auth/check-email)
+    if (
+      !req.url.startsWith('/api/v1') &&
+      !req.url.startsWith('/api/docs') &&
+      !req.url.startsWith('/favicon')
+    ) {
+      if (req.url.startsWith('/api/')) {
+        req.url = req.url.replace('/api/', '/api/v1/');
+      } else {
+        req.url = '/api/v1' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+      }
+      console.log(`[Vercel Function] Rewritten to: ${req.url}`);
+    }
+
     return server(req, res);
   } catch (err) {
     console.error('[Vercel Function] Nest Bootstrap Error:', err);
