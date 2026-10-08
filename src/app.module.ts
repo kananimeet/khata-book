@@ -65,9 +65,11 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       },
       entities: [User, Expense, ExpensePayment, Setting, DailyExpense, Notification],
       synchronize:
-        process.env.DB_SYNCHRONIZE === 'false'
-          ? false
-          : process.env.NODE_ENV !== 'production',
+        process.env.DB_SYNCHRONIZE === 'true'
+          ? true
+          : process.env.DB_SYNCHRONIZE === 'false'
+            ? false
+            : process.env.NODE_ENV !== 'production',
     }),
     TypeOrmModule.forFeature([
       User,
