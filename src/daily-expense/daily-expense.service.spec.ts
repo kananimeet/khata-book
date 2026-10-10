@@ -226,11 +226,12 @@ describe('DailyExpenseService', () => {
     });
 
     it('should allow admin to update any expense even if not pending', async () => {
-      const existing = {
+      const existing: any = {
         id: 'daily-1',
         user_id: 'user-1',
         status: DailyExpenseStatus.APPROVED,
         amount: 500,
+        admin_note: undefined,
       };
       mockDailyExpenseRepo.findOne.mockResolvedValue(existing);
 

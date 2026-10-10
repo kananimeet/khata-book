@@ -116,7 +116,17 @@ export class FirebaseService implements OnModuleInit {
       }
     }
 
-    const icon = payload.icon || '/icon-192x192.png';
+    const frontendBaseUrl =
+      process.env.FRONTEND_URL?.replace(/\/$/, '') ||
+      'https://fronted-khata-book.vercel.app';
+
+    const iconUrl = payload.icon
+      ? payload.icon.startsWith('http')
+        ? payload.icon
+        : `${frontendBaseUrl}${payload.icon.startsWith('/') ? '' : '/'}${payload.icon}`
+      : `${frontendBaseUrl}/icons/icon-192x192.png`;
+
+    const badgeUrl = `${frontendBaseUrl}/icons/icon-192x192.png`;
     const link = payload.link || '/';
 
     let totalSuccess = 0;
@@ -132,6 +142,7 @@ export class FirebaseService implements OnModuleInit {
         notification: {
           title: payload.title,
           body: payload.body,
+          imageUrl: iconUrl,
         },
         data: stringData,
         webpush: {
@@ -142,10 +153,13 @@ export class FirebaseService implements OnModuleInit {
           notification: {
             title: payload.title,
             body: payload.body,
-            icon: icon,
-            badge: icon,
+            icon: iconUrl,
+            badge: badgeUrl,
+            image: iconUrl,
             requireInteraction: true,
-            vibrate: [200, 100, 200],
+            silent: false,
+            renotify: true,
+            vibrate: [300, 100, 300, 100, 300],
             tag: payload.data?.type || 'khata-notification',
           },
           fcmOptions: {
