@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -41,6 +42,8 @@ import { NotificationType } from '../notification/entities/notification.entity.j
 
 @Injectable()
 export class ExpenseService {
+  private readonly logger = new Logger(ExpenseService.name);
+
   constructor(
     @InjectRepository(Expense)
     private readonly expenseRepository: Repository<Expense>,
@@ -62,6 +65,7 @@ export class ExpenseService {
     userId: string,
     createDto: CreateExpenseDto,
     userRole: UserRole = UserRole.USER,
+    actorUserId?: string,
   ): Promise<Expense> {
     if (userRole === UserRole.ADMIN && (createDto.user_id || createDto.userId)) {
       const targetUserId = (createDto.user_id || createDto.userId)!;
@@ -91,6 +95,7 @@ export class ExpenseService {
           note: note,
         },
         userRole === UserRole.ADMIN,
+        actorUserId || userId,
       );
     }
 
@@ -115,6 +120,7 @@ export class ExpenseService {
           note: note,
         },
         userRole === UserRole.ADMIN,
+        actorUserId || userId,
       );
     }
 
@@ -169,21 +175,26 @@ export class ExpenseService {
 
     const result = await this.findById(savedExpense.id, { id: userId, role: userRole });
 
-    // Notify all active users that a request has been created
+    // Notify all active users in background via setImmediate (exclude creator)
     const userName = result.user?.name || 'A user';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'New Room Rent Payment Request',
-      body: `${userName} submitted a payment request of ₹${payAmount} (${note}).`,
-      type: NotificationType.EXPENSE_REQUEST,
-      data: {
-        expense_id: savedExpense.id,
-        user_id: userId,
-        user_name: userName,
-        amount: payAmount,
-        status: ExpenseStatus.PENDING,
-      },
-      link: '/expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'New Room Rent Payment Request',
+        body: `${userName} submitted a payment request of ₹${payAmount} (${note}).`,
+        type: NotificationType.EXPENSE_REQUEST,
+        excludeUserId: actorUserId || userId,
+        data: {
+          expense_id: savedExpense.id,
+          user_id: userId,
+          user_name: userName,
+          amount: payAmount,
+          status: ExpenseStatus.PENDING,
+        },
+        link: '/expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for expense creation: ${err?.message}`);
+      });
+    });
 
     return result;
   }
@@ -196,6 +207,7 @@ export class ExpenseService {
     userId: string,
     paymentDto: CreatePaymentDto,
     isAdmin = false,
+    actorUserId?: string,
   ): Promise<Expense> {
     const expense = await this.expenseRepository.findOne({
       where: { id: expenseId },
@@ -265,22 +277,27 @@ export class ExpenseService {
       role: isAdmin ? UserRole.ADMIN : UserRole.USER,
     });
 
-    // Notify all active users that an installment payment request has been created
+    // Notify all active users in background via setImmediate (exclude creator)
     const userName = result.user?.name || 'A user';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'New Installment Payment Request',
-      body: `${userName} submitted an installment payment request of ₹${payAmount}.`,
-      type: NotificationType.EXPENSE_PAYMENT_REQUEST,
-      data: {
-        expense_id: expense.id,
-        payment_id: payment.id,
-        user_id: userId,
-        user_name: userName,
-        amount: payAmount,
-        status: ExpensePaymentStatus.PENDING,
-      },
-      link: '/expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'New Installment Payment Request',
+        body: `${userName} submitted an installment payment request of ₹${payAmount}.`,
+        type: NotificationType.EXPENSE_PAYMENT_REQUEST,
+        excludeUserId: actorUserId || userId,
+        data: {
+          expense_id: expense.id,
+          payment_id: payment.id,
+          user_id: userId,
+          user_name: userName,
+          amount: payAmount,
+          status: ExpensePaymentStatus.PENDING,
+        },
+        link: '/expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for payment request: ${err?.message}`);
+      });
+    });
 
     return result;
   }
@@ -291,6 +308,7 @@ export class ExpenseService {
   async approveExpense(
     expenseId: string,
     approveDto?: ApproveExpenseDto,
+    adminUserId?: string,
   ): Promise<Expense> {
     const expense = await this.expenseRepository.findOne({
       where: { id: expenseId },
@@ -366,22 +384,27 @@ export class ExpenseService {
       role: UserRole.ADMIN,
     });
 
-    // Notify all active users that admin approved the request
+    // Notify all active users in background via setImmediate so approve returns instantly
     const targetUserName = result.user?.name || 'User';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'Room Rent Request Approved',
-      body: `Admin approved room rent request for ${targetUserName}. Paid: ₹${expense.paid_amount}, Remaining: ₹${expense.remaining_amount}. Status is ${expense.status}.`,
-      type: NotificationType.EXPENSE_APPROVED,
-      data: {
-        expense_id: expense.id,
-        user_id: expense.user_id,
-        user_name: targetUserName,
-        status: expense.status,
-        paid_amount: expense.paid_amount,
-        remaining_amount: expense.remaining_amount,
-      },
-      link: '/expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'Room Rent Request Approved',
+        body: `Admin approved room rent request for ${targetUserName}. Paid: ₹${expense.paid_amount}, Remaining: ₹${expense.remaining_amount}. Status is ${expense.status}.`,
+        type: NotificationType.EXPENSE_APPROVED,
+        excludeUserId: adminUserId,
+        data: {
+          expense_id: expense.id,
+          user_id: expense.user_id,
+          user_name: targetUserName,
+          status: expense.status,
+          paid_amount: expense.paid_amount,
+          remaining_amount: expense.remaining_amount,
+        },
+        link: '/expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for expense approval: ${err?.message}`);
+      });
+    });
 
     return result;
   }
@@ -458,6 +481,7 @@ export class ExpenseService {
   async approvePayment(
     paymentId: string,
     approveDto?: ApproveExpenseDto,
+    adminUserId?: string,
   ): Promise<Expense> {
     const payment = await this.paymentRepository.findOne({
       where: { id: paymentId },
@@ -512,21 +536,26 @@ export class ExpenseService {
       role: UserRole.ADMIN,
     });
 
-    // Notify all active users that admin approved installment payment
+    // Notify all active users in background via setImmediate so approve returns instantly
     const targetUserName = result.user?.name || 'User';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'Installment Payment Approved',
-      body: `Admin approved installment payment of ₹${payment.amount} for ${targetUserName}.`,
-      type: NotificationType.EXPENSE_PAYMENT_APPROVED,
-      data: {
-        expense_id: payment.expense_id,
-        payment_id: payment.id,
-        user_id: payment.user_id,
-        user_name: targetUserName,
-        amount: payment.amount,
-      },
-      link: '/expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'Installment Payment Approved',
+        body: `Admin approved installment payment of ₹${payment.amount} for ${targetUserName}.`,
+        type: NotificationType.EXPENSE_PAYMENT_APPROVED,
+        excludeUserId: adminUserId,
+        data: {
+          expense_id: payment.expense_id,
+          payment_id: payment.id,
+          user_id: payment.user_id,
+          user_name: targetUserName,
+          amount: payment.amount,
+        },
+        link: '/expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for payment approval: ${err?.message}`);
+      });
+    });
 
     return result;
   }
@@ -1077,6 +1106,7 @@ export class ExpenseService {
       });
       if (!expense) {
         expense = await this.expenseRepository.findOne({
+          where: {},
           order: { created_at: 'DESC' },
         });
       }
@@ -1116,6 +1146,7 @@ export class ExpenseService {
           take: 50,
         });
         let leftover = excess;
+        const toSave: Expense[] = [];
         for (const other of otherExpenses) {
           if (other.id === expense.id || Number(other.total_amount) <= 0) continue;
           const otherPrev = Number(other.total_amount);
@@ -1133,9 +1164,12 @@ export class ExpenseService {
               ? `${other.admin_note}\n[Room grocery shared deduction: -${deductFromOther} (${reason})]`
               : `[Room grocery shared deduction: -${deductFromOther} (${reason})]`;
           }
-          await this.expenseRepository.save(other);
+          toSave.push(other);
           leftover -= deductFromOther;
           if (leftover <= 0) break;
+        }
+        if (toSave.length > 0) {
+          await this.expenseRepository.save(toSave);
         }
       }
 

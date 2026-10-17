@@ -17,6 +17,7 @@ export interface SendAllActiveUsersPayload {
   data?: Record<string, any>;
   link?: string;
   excludeUserId?: string;
+  excludeUserIds?: string[];
 }
 
 @Injectable()
@@ -33,7 +34,7 @@ export class NotificationService {
 
   /**
    * Send notification to all ACTIVE users saved in the user table.
-   * 1. Stores in-app notification in the notifications table for all active users.
+   * 1. Stores in-app notification in the notifications table for all active users (excluding sender/actor).
    * 2. Sends FCM Web Push notification to all active users with registered tokens.
    * Web push displays even when website is closed/inactive.
    */
@@ -54,15 +55,26 @@ export class NotificationService {
         return;
       }
 
-      const targetUsers = payload.excludeUserId
-        ? activeUsers.filter((u) => u.id !== payload.excludeUserId)
+      // Collect all user IDs to exclude (sender, creator, or approving admin)
+      const excludedUserIds = new Set<string>();
+      if (payload.excludeUserId) {
+        excludedUserIds.add(payload.excludeUserId);
+      }
+      if (Array.isArray(payload.excludeUserIds)) {
+        payload.excludeUserIds.forEach((id) => {
+          if (id) excludedUserIds.add(id);
+        });
+      }
+
+      const targetUsers = excludedUserIds.size > 0
+        ? activeUsers.filter((u) => !excludedUserIds.has(u.id))
         : activeUsers;
 
       if (targetUsers.length === 0) {
         return;
       }
 
-      // 1. Save in-app notification for each active user
+      // 1. Save in-app notification for each active target user
       const entities = targetUsers.map((user) =>
         this.notificationRepository.create({
           user_id: user.id,
@@ -76,16 +88,28 @@ export class NotificationService {
 
       await this.notificationRepository.save(entities);
 
-      // 2. Collect FCM tokens from active users for Web Push
+      // Collect tokens that belong to excluded users to guarantee they never get push on their device
+      const excludedTokens = new Set(
+        activeUsers
+          .filter((u) => excludedUserIds.has(u.id))
+          .map((u) => u.fcm_token)
+          .filter((t): t is string => Boolean(t && t.trim().length > 0)),
+      );
+
+      // 2. Collect FCM tokens from active target users for Web Push (excluding any excluded token)
       const tokens = targetUsers
         .map((u) => u.fcm_token)
-        .filter((t): t is string => Boolean(t && t.trim().length > 0));
+        .filter((t): t is string => Boolean(t && t.trim().length > 0))
+        .filter((t) => !excludedTokens.has(t));
 
       if (tokens.length > 0) {
         const pushResult = await this.firebaseService.sendMulticast(tokens, {
           title: payload.title,
           body: payload.body,
-          data: payload.data,
+          data: {
+            ...payload.data,
+            type: payload.type,
+          },
           link: payload.link || '/',
         });
 
@@ -202,7 +226,22 @@ export class NotificationService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
-    user.fcm_token = fcmToken;
+
+    const trimmedToken = fcmToken?.trim();
+    if (trimmedToken) {
+      // Clear this device token from any other users who previously held it on this browser/device
+      await this.userRepository
+        .createQueryBuilder()
+        .update(User)
+        .set({ fcm_token: null as any })
+        .where('fcm_token = :trimmedToken AND id != :userId', {
+          trimmedToken,
+          userId,
+        })
+        .execute();
+    }
+
+    user.fcm_token = trimmedToken || undefined;
     return this.userRepository.save(user);
   }
 
