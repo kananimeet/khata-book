@@ -108,14 +108,6 @@ export class FirebaseService implements OnModuleInit {
       return { successCount: 0, failureCount: 0, invalidTokens };
     }
 
-    // Convert data values to strings as required by FCM
-    const stringData: Record<string, string> = {};
-    if (payload.data) {
-      for (const [key, val] of Object.entries(payload.data)) {
-        stringData[key] = typeof val === 'string' ? val : JSON.stringify(val);
-      }
-    }
-
     const frontendBaseUrl =
       process.env.FRONTEND_URL?.replace(/\/$/, '') ||
       'https://fronted-khata-book.vercel.app';
@@ -129,6 +121,35 @@ export class FirebaseService implements OnModuleInit {
     const badgeUrl = `${frontendBaseUrl}/icons/icon-192x192.png`;
     const link = payload.link || '/';
 
+    const notificationTag =
+      payload.data?.type ||
+      (payload.data?.expense_id
+        ? `khatabook-${payload.data.expense_id}`
+        : payload.data?.daily_expense_id
+          ? `khatabook-${payload.data.daily_expense_id}`
+          : 'khata-notification');
+
+    // Convert data values to strings as required by FCM.
+    // We send payload as a data-only push so the service worker (firebase-messaging-sw.js)
+    // displays exactly ONE notification via self.registration.showNotification.
+    // Providing top-level `notification` or `webpush.notification` causes the browser
+    // to automatically show a notification, creating double notifications.
+    const stringData: Record<string, string> = {
+      title: payload.title,
+      body: payload.body,
+      icon: iconUrl,
+      badge: badgeUrl,
+      image: iconUrl,
+      link: link,
+      url: link,
+      tag: notificationTag,
+    };
+    if (payload.data) {
+      for (const [key, val] of Object.entries(payload.data)) {
+        stringData[key] = typeof val === 'string' ? val : JSON.stringify(val);
+      }
+    }
+
     let totalSuccess = 0;
     let totalFailure = 0;
 
@@ -139,28 +160,11 @@ export class FirebaseService implements OnModuleInit {
 
       const message: MulticastMessage = {
         tokens: batchTokens,
-        notification: {
-          title: payload.title,
-          body: payload.body,
-          imageUrl: iconUrl,
-        },
         data: stringData,
         webpush: {
           headers: {
             Urgency: 'high',
             TTL: '86400', // Keep alive for 24 hours
-          },
-          notification: {
-            title: payload.title,
-            body: payload.body,
-            icon: iconUrl,
-            badge: badgeUrl,
-            image: iconUrl,
-            requireInteraction: true,
-            silent: false,
-            renotify: true,
-            vibrate: [300, 100, 300, 100, 300],
-            tag: payload.data?.type || 'khata-notification',
           },
           fcmOptions: {
             link: link,

@@ -84,6 +84,7 @@ export class ExpenseController {
       targetUserId,
       createExpenseDto,
       currentUser.role,
+      currentUser.id,
     );
     return {
       message: EXPENSE_CREATED_SUCCESS,
@@ -235,9 +236,14 @@ export class ExpenseController {
   })
   async approveExpense(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: { id: string; role: UserRole },
     @Body() approveDto: ApproveExpenseDto,
   ) {
-    const expense = await this.expenseService.approveExpense(id, approveDto);
+    const expense = await this.expenseService.approveExpense(
+      id,
+      approveDto,
+      currentUser.id,
+    );
     return {
       message: EXPENSE_APPROVED_SUCCESS,
       data: expense,
@@ -291,11 +297,13 @@ export class ExpenseController {
   })
   async approvePayment(
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
+    @CurrentUser() currentUser: { id: string; role: UserRole },
     @Body() approveDto: ApproveExpenseDto,
   ) {
     const expense = await this.expenseService.approvePayment(
       paymentId,
       approveDto,
+      currentUser.id,
     );
     return {
       message: EXPENSE_APPROVED_SUCCESS,

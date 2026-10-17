@@ -85,6 +85,7 @@ export class DailyExpenseController {
       currentUser.id,
       createDto,
       currentUser.role,
+      currentUser.id,
     );
 
     return {
@@ -268,9 +269,14 @@ export class DailyExpenseController {
   })
   async approve(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() currentUser: { id: string; role: UserRole },
     @Body() approveDto: ApproveDailyExpenseDto,
   ) {
-    const expense = await this.dailyExpenseService.approve(id, approveDto);
+    const expense = await this.dailyExpenseService.approve(
+      id,
+      approveDto,
+      currentUser.id,
+    );
     return {
       message: DAILY_EXPENSE_APPROVED_SUCCESS,
       data: expense,

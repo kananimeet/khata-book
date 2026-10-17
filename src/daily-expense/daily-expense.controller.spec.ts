@@ -56,6 +56,7 @@ describe('DailyExpenseController', () => {
       'user-1',
       dto,
       UserRole.USER,
+      'user-1',
     );
     expect(result.message).toBe(DAILY_EXPENSE_CREATED_SUCCESS);
     expect(result.data).toEqual(mockCreated);
@@ -91,13 +92,17 @@ describe('DailyExpenseController', () => {
     };
     mockDailyExpenseService.approve.mockResolvedValue(mockApproved);
 
-    const result = await controller.approve('daily-1', {
-      admin_note: 'Approved',
-    });
+    const result = await controller.approve(
+      'daily-1',
+      { id: 'admin-1', role: UserRole.ADMIN },
+      { admin_note: 'Approved' },
+    );
 
-    expect(mockDailyExpenseService.approve).toHaveBeenCalledWith('daily-1', {
-      admin_note: 'Approved',
-    });
+    expect(mockDailyExpenseService.approve).toHaveBeenCalledWith(
+      'daily-1',
+      { admin_note: 'Approved' },
+      'admin-1',
+    );
     expect(result.message).toBe(DAILY_EXPENSE_APPROVED_SUCCESS);
     expect(result.data).toEqual(mockApproved);
   });

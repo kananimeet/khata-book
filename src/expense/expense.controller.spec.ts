@@ -51,6 +51,7 @@ describe('ExpenseController', () => {
       'user-1',
       dto,
       UserRole.USER,
+      'user-1',
     );
     expect(result.message).toBe(EXPENSE_CREATED_SUCCESS);
     expect(result.data).toEqual(mockExpense);
@@ -87,13 +88,17 @@ describe('ExpenseController', () => {
     };
     mockExpenseService.approveExpense.mockResolvedValue(mockExpense);
 
-    const result = await controller.approveExpense('exp-1', {
-      admin_note: 'Approved',
-    });
+    const result = await controller.approveExpense(
+      'exp-1',
+      { id: 'admin-1', role: UserRole.ADMIN },
+      { admin_note: 'Approved' },
+    );
 
-    expect(mockExpenseService.approveExpense).toHaveBeenCalledWith('exp-1', {
-      admin_note: 'Approved',
-    });
+    expect(mockExpenseService.approveExpense).toHaveBeenCalledWith(
+      'exp-1',
+      { admin_note: 'Approved' },
+      'admin-1',
+    );
     expect(result.message).toBe(EXPENSE_APPROVED_SUCCESS);
   });
 

@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ForbiddenException,
@@ -36,6 +37,8 @@ import { NotificationType } from '../notification/entities/notification.entity.j
 
 @Injectable()
 export class DailyExpenseService {
+  private readonly logger = new Logger(DailyExpenseService.name);
+
   constructor(
     @InjectRepository(DailyExpense)
     private readonly dailyExpenseRepository: Repository<DailyExpense>,
@@ -53,6 +56,7 @@ export class DailyExpenseService {
     userId: string,
     createDto: CreateDailyExpenseDto,
     userRole: UserRole = UserRole.USER,
+    actorUserId?: string,
   ): Promise<DailyExpense> {
     let targetUser: User | null = null;
     if (userRole === UserRole.ADMIN && createDto.user_id) {
@@ -101,22 +105,27 @@ export class DailyExpenseService {
         },
       })) as User);
 
-    // Notify all active users that daily expense was created
+    // Notify all active users in background via setImmediate so response is returned instantly
     const creatorName = saved.user?.name || 'A user';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'New Daily Expense Request',
-      body: `${creatorName} submitted daily expense of ₹${saved.amount} (${saved.category}).`,
-      type: NotificationType.DAILY_EXPENSE_REQUEST,
-      data: {
-        daily_expense_id: saved.id,
-        user_id: saved.user_id,
-        user_name: creatorName,
-        amount: saved.amount,
-        category: saved.category,
-        status: saved.status,
-      },
-      link: '/daily-expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'New Daily Expense Request',
+        body: `${creatorName} submitted daily expense of ₹${saved.amount} (${saved.category}).`,
+        type: NotificationType.DAILY_EXPENSE_REQUEST,
+        excludeUserId: actorUserId || userId,
+        data: {
+          daily_expense_id: saved.id,
+          user_id: saved.user_id,
+          user_name: creatorName,
+          amount: saved.amount,
+          category: saved.category,
+          status: saved.status,
+        },
+        link: '/daily-expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for daily expense creation: ${err?.message}`);
+      });
+    });
 
     return saved;
   }
@@ -352,6 +361,7 @@ export class DailyExpenseService {
   async approve(
     id: string,
     approveDto?: ApproveDailyExpenseDto,
+    adminUserId?: string,
   ): Promise<DailyExpense> {
     const expense = await this.dailyExpenseRepository.findOne({
       where: { id },
@@ -387,22 +397,27 @@ export class DailyExpenseService {
 
     await this.dailyExpenseRepository.save(expense);
 
-    // Notify all active users that daily expense was approved by Admin
+    // Notify all active users in background via setImmediate so approve returns instantly
     const targetUserName = expense.user?.name || 'User';
-    this.notificationService?.sendNotificationToAllActiveUsers({
-      title: 'Daily Expense Approved',
-      body: `Admin approved daily expense of ₹${expense.amount} (${expense.category}) for ${targetUserName}.`,
-      type: NotificationType.DAILY_EXPENSE_APPROVED,
-      data: {
-        daily_expense_id: expense.id,
-        user_id: expense.user_id,
-        user_name: targetUserName,
-        amount: expense.amount,
-        category: expense.category,
-        status: expense.status,
-      },
-      link: '/daily-expenses',
-    }).catch(() => {});
+    setImmediate(() => {
+      this.notificationService?.sendNotificationToAllActiveUsers({
+        title: 'Daily Expense Approved',
+        body: `Admin approved daily expense of ₹${expense.amount} (${expense.category}) for ${targetUserName}.`,
+        type: NotificationType.DAILY_EXPENSE_APPROVED,
+        excludeUserId: adminUserId,
+        data: {
+          daily_expense_id: expense.id,
+          user_id: expense.user_id,
+          user_name: targetUserName,
+          amount: expense.amount,
+          category: expense.category,
+          status: expense.status,
+        },
+        link: '/daily-expenses',
+      }).catch((err: any) => {
+        this.logger.warn(`Failed background push for daily expense approval: ${err?.message}`);
+      });
+    });
 
     return expense;
   }

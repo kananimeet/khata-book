@@ -97,6 +97,31 @@ describe('NotificationService', () => {
       );
     });
 
+    it('should exclude specified user and their token from notification and push', async () => {
+      await service.sendNotificationToAllActiveUsers({
+        title: 'New Expense Request',
+        body: 'User One submitted room rent',
+        type: NotificationType.EXPENSE_REQUEST,
+        excludeUserId: 'user-1',
+      });
+
+      // Target users saved in DB should NOT contain user-1
+      expect(mockNotificationRepo.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: 'user-1' }),
+      );
+      expect(mockNotificationRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ user_id: 'user-2' }),
+      );
+
+      // Push tokens should NOT contain token-1 (which belongs to user-1)
+      expect(mockFirebaseService.sendMulticast).toHaveBeenCalledWith(
+        ['token-2'],
+        expect.objectContaining({
+          title: 'New Expense Request',
+        }),
+      );
+    });
+
     it('should clean up invalid tokens if reported by Firebase', async () => {
       mockFirebaseService.sendMulticast.mockResolvedValueOnce({
         successCount: 1,
@@ -128,12 +153,13 @@ describe('NotificationService', () => {
   });
 
   describe('updateFcmToken', () => {
-    it('should update user fcm_token in users table', async () => {
+    it('should update user fcm_token in users table and clear from other users', async () => {
       const updated = await service.updateFcmToken('user-1', 'new-device-token');
 
       expect(mockUserRepo.findOne).toHaveBeenCalledWith({
         where: { id: 'user-1' },
       });
+      expect(mockUserRepo.createQueryBuilder).toHaveBeenCalled();
       expect(updated.fcm_token).toBe('new-device-token');
       expect(mockUserRepo.save).toHaveBeenCalled();
     });
