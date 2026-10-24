@@ -34,6 +34,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { UserRole } from '../common/enums/role.enum.js';
 import { userProfilePictureUploadOptions } from '../helper/multer.helper.js';
+import { CloudinaryService } from '../cloudinary/cloudinary.service.js';
 import {
   USER_CREATED_SUCCESS,
   USER_UPDATED_SUCCESS,
@@ -45,7 +46,10 @@ import {
 @ApiBearerAuth()
 @Controller('users')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly cloudinaryService?: CloudinaryService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -85,7 +89,15 @@ export class UserController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      createUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/users',
+        );
+        createUserDto.profile_picture = uploadResult.secure_url;
+      } else if (file.filename) {
+        createUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      }
     } else if (
       createUserDto.profile_picture === '' ||
       typeof createUserDto.profile_picture !== 'string'
@@ -230,7 +242,15 @@ export class UserController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/users',
+        );
+        updateUserDto.profile_picture = uploadResult.secure_url;
+      } else if (file.filename) {
+        updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      }
     } else if (
       updateUserDto.profile_picture === '' ||
       typeof updateUserDto.profile_picture !== 'string'
@@ -287,7 +307,15 @@ export class UserController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/users',
+        );
+        updateUserDto.profile_picture = uploadResult.secure_url;
+      } else if (file.filename) {
+        updateUserDto.profile_picture = `/uploads/users/${file.filename}`;
+      }
     } else if (
       updateUserDto.profile_picture === '' ||
       typeof updateUserDto.profile_picture !== 'string'

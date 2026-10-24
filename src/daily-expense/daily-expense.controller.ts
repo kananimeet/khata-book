@@ -39,6 +39,7 @@ import { Roles } from '../common/decorators/roles.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { UserRole } from '../common/enums/role.enum.js';
 import { dailyExpensePhotoUploadOptions } from '../helper/multer.helper.js';
+import { CloudinaryService } from '../cloudinary/cloudinary.service.js';
 import {
   DAILY_EXPENSE_CREATED_SUCCESS,
   DAILY_EXPENSE_UPDATED_SUCCESS,
@@ -55,7 +56,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('daily-expenses')
 export class DailyExpenseController {
-  constructor(private readonly dailyExpenseService: DailyExpenseService) {}
+  constructor(
+    private readonly dailyExpenseService: DailyExpenseService,
+    private readonly cloudinaryService?: CloudinaryService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -78,7 +82,15 @@ export class DailyExpenseController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      createDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/daily-expenses',
+        );
+        createDto.payment_photo = uploadResult.secure_url;
+      } else if (file.filename) {
+        createDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      }
     }
 
     const expense = await this.dailyExpenseService.create(
@@ -204,7 +216,15 @@ export class DailyExpenseController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      updateDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/daily-expenses',
+        );
+        updateDto.payment_photo = uploadResult.secure_url;
+      } else if (file.filename) {
+        updateDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      }
     }
 
     const expense = await this.dailyExpenseService.update(
@@ -234,7 +254,15 @@ export class DailyExpenseController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     if (file) {
-      updateDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      if (this.cloudinaryService && (file.buffer || file.path)) {
+        const uploadResult = await this.cloudinaryService.uploadFile(
+          file,
+          'khata-book/daily-expenses',
+        );
+        updateDto.payment_photo = uploadResult.secure_url;
+      } else if (file.filename) {
+        updateDto.payment_photo = `/uploads/daily-expenses/${file.filename}`;
+      }
     }
 
     const expense = await this.dailyExpenseService.update(
