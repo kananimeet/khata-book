@@ -18,6 +18,7 @@ import { ExpenseModule } from './expense/expense.module.js';
 import { SettingModule } from './setting/setting.module.js';
 import { DailyExpenseModule } from './daily-expense/daily-expense.module.js';
 import { NotificationModule } from './notification/notification.module.js';
+import { CloudinaryModule } from './cloudinary/cloudinary.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -86,6 +87,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
     SettingModule,
     DailyExpenseModule,
     NotificationModule,
+    CloudinaryModule,
     ...(process.env.OBSERVE_APP_KEY &&
     process.env.OBSERVE_APP_KEY !== 'YOUR_APP_KEY'
       ? [
