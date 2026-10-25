@@ -69,7 +69,10 @@ describe('UserService', () => {
     });
 
     it('should throw ConflictException if email already exists', async () => {
-      mockRepository.findOne.mockResolvedValueOnce({ id: 'uuid-existing', email: 'john@example.com' });
+      mockRepository.findOne.mockResolvedValueOnce({
+        id: 'uuid-existing',
+        email: 'john@example.com',
+      });
 
       const dto = {
         name: 'John Doe',
@@ -84,7 +87,10 @@ describe('UserService', () => {
     it('should throw ConflictException if mobile already exists', async () => {
       mockRepository.findOne
         .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ id: 'uuid-existing', mobile: '+919876543210' });
+        .mockResolvedValueOnce({
+          id: 'uuid-existing',
+          mobile: '+919876543210',
+        });
 
       const dto = {
         name: 'John Doe',
@@ -100,8 +106,20 @@ describe('UserService', () => {
   describe('findAll', () => {
     it('should return paginated list of users', async () => {
       const mockUsers = [
-        { id: '1', name: 'User 1', email: 'u1@example.com', mobile: '111', profile_picture: null },
-        { id: '2', name: 'User 2', email: 'u2@example.com', mobile: '222', profile_picture: null },
+        {
+          id: '1',
+          name: 'User 1',
+          email: 'u1@example.com',
+          mobile: '111',
+          profile_picture: null,
+        },
+        {
+          id: '2',
+          name: 'User 2',
+          email: 'u2@example.com',
+          mobile: '222',
+          profile_picture: null,
+        },
       ];
 
       const qb: any = {
@@ -115,7 +133,11 @@ describe('UserService', () => {
 
       mockRepository.createQueryBuilder.mockReturnValue(qb);
 
-      const result = await service.findAll({ page: 1, limit: 10, search: 'User' });
+      const result = await service.findAll({
+        page: 1,
+        limit: 10,
+        search: 'User',
+      });
 
       expect(qb.where).toHaveBeenCalledWith('user.role != :excludedRole', {
         excludedRole: UserRole.ADMIN,
@@ -204,9 +226,9 @@ describe('UserService', () => {
     it('should throw NotFoundException if user does not exist', async () => {
       mockRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.update('non-existent-id', { name: 'Test' })).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.update('non-existent-id', { name: 'Test' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -10,10 +10,7 @@ import {
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '../../common/enums/role.enum.js';
-import {
-  EMAIL_INVALID,
-  EMAIL_REQUIRED,
-} from '../../common/message.js';
+import { EMAIL_INVALID, EMAIL_REQUIRED } from '../../common/message.js';
 
 export class CreateUserDto {
   @ApiProperty({

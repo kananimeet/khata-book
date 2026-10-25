@@ -18,7 +18,8 @@ export class SetPasswordDto {
 
   @ApiProperty({
     example: 'NewPassword@123',
-    description: 'New password to set for the user account (minimum 6 characters)',
+    description:
+      'New password to set for the user account (minimum 6 characters)',
   })
   @IsString({ message: PASSWORD_STRING })
   @IsNotEmpty({ message: PASSWORD_REQUIRED })
