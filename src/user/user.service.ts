@@ -2,6 +2,7 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
@@ -16,6 +17,7 @@ import {
   USER_NOT_FOUND,
   USER_MOBILE_ALREADY_EXISTS,
 } from '../common/message.js';
+import { FastCacheService } from '../common/cache/fast-cache.service.js';
 
 const BCRYPT_SALT_ROUNDS = 10;
 
@@ -24,7 +26,13 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Optional()
+    private readonly cacheService?: FastCacheService,
   ) {}
+
+  public invalidateCache(): void {
+    this.cacheService?.deleteByPrefix('users:');
+  }
 
   async findByEmail(email: string): Promise<User | null> {
     return this.userRepository.findOne({
@@ -92,61 +100,73 @@ export class UserService {
     });
 
     const savedUser = await this.userRepository.save(user);
+    this.invalidateCache();
     const { password: _password, ...result } = savedUser;
     return result as User;
   }
 
   async updatePassword(id: string, hashedPassword: string): Promise<void> {
     await this.userRepository.update(id, { password: hashedPassword });
+    this.invalidateCache();
   }
 
   async updateHasLogin(id: string, has_login = true): Promise<void> {
     await this.userRepository.update(id, { has_login });
+    this.invalidateCache();
   }
 
   async findAll(query: QueryUserDto) {
-    const page = Math.max(1, query.page || 1);
-    const limit = Math.max(1, query.limit || 10);
-    const skip = (page - 1) * limit;
+    const cacheKey = `users:list:${JSON.stringify(query)}`;
 
-    const qb: SelectQueryBuilder<User> =
-      this.userRepository.createQueryBuilder('user');
+    const execute = async () => {
+      const page = Math.max(1, query.page || 1);
+      const limit = Math.max(1, query.limit || 10);
+      const skip = (page - 1) * limit;
 
-    // Exclude users with role ADMIN so only non-admin users are listed
-    qb.where('user.role != :excludedRole', { excludedRole: UserRole.ADMIN });
+      const qb: SelectQueryBuilder<User> =
+        this.userRepository.createQueryBuilder('user');
 
-    if (query.search) {
-      qb.andWhere(
-        '(user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
-    }
+      // Exclude users with role ADMIN so only non-admin users are listed
+      qb.where('user.role != :excludedRole', { excludedRole: UserRole.ADMIN });
 
-    if (query.role && query.role !== UserRole.ADMIN) {
-      qb.andWhere('user.role = :role', { role: query.role });
-    }
+      if (query.search) {
+        qb.andWhere(
+          '(user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
+          { search: `%${query.search}%` },
+        );
+      }
 
-    if (query.is_active !== undefined) {
-      qb.andWhere('user.is_active = :isActive', { isActive: query.is_active });
-    }
+      if (query.role && query.role !== UserRole.ADMIN) {
+        qb.andWhere('user.role = :role', { role: query.role });
+      }
 
-    if (query.has_login !== undefined) {
-      qb.andWhere('user.has_login = :hasLogin', { hasLogin: query.has_login });
-    }
+      if (query.is_active !== undefined) {
+        qb.andWhere('user.is_active = :isActive', { isActive: query.is_active });
+      }
 
-    qb.orderBy('user.created_at', 'DESC');
-    qb.skip(skip).take(limit);
+      if (query.has_login !== undefined) {
+        qb.andWhere('user.has_login = :hasLogin', { hasLogin: query.has_login });
+      }
 
-    const [users, total] = await qb.getManyAndCount();
-    const totalPages = Math.ceil(total / limit);
+      qb.orderBy('user.created_at', 'DESC');
+      qb.skip(skip).take(limit);
 
-    return {
-      users,
-      total,
-      page,
-      limit,
-      totalPages,
+      const [users, total] = await qb.getManyAndCount();
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        users,
+        total,
+        page,
+        limit,
+        totalPages,
+      };
     };
+
+    if (this.cacheService) {
+      return this.cacheService.wrap(cacheKey, execute, 15_000);
+    }
+    return execute();
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
@@ -181,6 +201,7 @@ export class UserService {
     Object.assign(user, updateUserDto);
 
     const savedUser = await this.userRepository.save(user);
+    this.invalidateCache();
     const { password: _password, ...result } = savedUser;
     return result as User;
   }
@@ -190,8 +211,13 @@ export class UserService {
     if (!user) {
       throw new NotFoundException(USER_NOT_FOUND(id));
     }
+    if (user.fcm_token === fcmToken) {
+      const { password: _password, ...result } = user;
+      return result as User;
+    }
     user.fcm_token = fcmToken;
     const saved = await this.userRepository.save(user);
+    this.invalidateCache();
     const { password: _password, ...result } = saved;
     return result as User;
   }
@@ -199,5 +225,6 @@ export class UserService {
   async clearFcmToken(fcmToken: string): Promise<void> {
     if (!fcmToken) return;
     await this.userRepository.update({ fcm_token: fcmToken }, { fcm_token: undefined as any });
+    this.invalidateCache();
   }
 }

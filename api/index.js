@@ -1,3 +1,6 @@
+// Optimize Node.js threadpool size on Vercel for bcrypt and crypto operations
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '64';
+
 import 'pg';
 import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
@@ -10,8 +13,16 @@ import { TryCatchInterceptor } from '../dist/common/interceptors/try-catch.inter
 import { ResponseInterceptor } from '../dist/common/interceptors/response.interceptor.js';
 
 const server = express();
-server.use(compression());
-let isAppInitialized = false;
+server.use(
+  compression({
+    threshold: 1024,
+    level: 6,
+  }),
+);
+server.set('x-powered-by', false);
+server.set('etag', 'strong');
+
+let bootstrapPromise = null;
 
 async function bootstrap() {
   const app = await NestFactory.create(
@@ -27,6 +38,9 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: false,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
     }),
   );
 
@@ -53,17 +67,19 @@ async function bootstrap() {
   });
 
   await app.init();
-  isAppInitialized = true;
+}
+
+async function getInitializedServer() {
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrap();
+  }
+  await bootstrapPromise;
+  return server;
 }
 
 export default async function handler(req, res) {
   try {
-    console.log(`[Vercel Function] Incoming: ${req.method} ${req.url}`);
-    if (!isAppInitialized) {
-      console.log('[Vercel Function] Initializing NestJS App...');
-      await bootstrap();
-      console.log('[Vercel Function] NestJS App Initialized successfully!');
-    }
+    await getInitializedServer();
 
     // Auto-prefix /api/v1 if client called without it (e.g. /auth/check-email -> /api/v1/auth/check-email)
     if (
@@ -76,17 +92,16 @@ export default async function handler(req, res) {
       } else {
         req.url = '/api/v1' + (req.url.startsWith('/') ? req.url : '/' + req.url);
       }
-      console.log(`[Vercel Function] Rewritten to: ${req.url}`);
     }
 
     return server(req, res);
   } catch (err) {
-    console.error('[Vercel Function] Nest Bootstrap Error:', err);
+    console.error('[Vercel Function] Error:', err);
     return res.status(500).json({
       statusCode: 500,
       message: 'Failed to initialize NestJS application on Vercel',
       error: err?.message || String(err),
-      stack: err?.stack,
     });
   }
 }
+
