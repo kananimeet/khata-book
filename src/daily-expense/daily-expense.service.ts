@@ -34,6 +34,7 @@ import {
 } from '../common/message.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { NotificationType } from '../notification/entities/notification.entity.js';
+import { FastCacheService } from '../common/cache/fast-cache.service.js';
 
 @Injectable()
 export class DailyExpenseService {
@@ -47,7 +48,13 @@ export class DailyExpenseService {
     private readonly expenseService: ExpenseService,
     @Optional()
     private readonly notificationService?: NotificationService,
+    @Optional()
+    private readonly cacheService?: FastCacheService,
   ) {}
+
+  public invalidateCache(): void {
+    this.cacheService?.deleteByPrefix('daily:');
+  }
 
   /**
    * User creates daily expense request (or Admin creates for any user).
@@ -127,6 +134,7 @@ export class DailyExpenseService {
       });
     });
 
+    this.invalidateCache();
     return saved;
   }
 
@@ -138,136 +146,145 @@ export class DailyExpenseService {
     query: QueryDailyExpenseDto,
     currentUser: { id: string; role: UserRole },
   ) {
-    const page = Math.max(1, Number(query.page) || 1);
-    const limit = Math.max(1, Math.min(100, Number(query.limit) || 10));
-    const skip = (page - 1) * limit;
+    const cacheKey = `daily:list:${JSON.stringify(query)}:${currentUser.id}:${currentUser.role}`;
 
-    const itemsQb = this.dailyExpenseRepository
-      .createQueryBuilder('daily')
-      .leftJoinAndSelect('daily.user', 'user');
+    const execute = async () => {
+      const page = Math.max(1, Number(query.page) || 1);
+      const limit = Math.max(1, Math.min(100, Number(query.limit) || 10));
+      const skip = (page - 1) * limit;
 
-    const summaryQb = this.dailyExpenseRepository
-      .createQueryBuilder('daily');
+      const itemsQb = this.dailyExpenseRepository
+        .createQueryBuilder('daily')
+        .leftJoinAndSelect('daily.user', 'user');
 
-    const applyFilters = (
-      targetQb: SelectQueryBuilder<DailyExpense>,
-      isItems = false,
-    ) => {
-      if (query.user_id && query.user_id !== 'all') {
-        targetQb.andWhere('daily.user_id = :filterUserId', {
-          filterUserId: query.user_id,
-        });
-      }
+      const summaryQb = this.dailyExpenseRepository
+        .createQueryBuilder('daily');
 
-      if (query.expense_type) {
-        targetQb.andWhere('daily.expense_type = :expenseType', {
-          expenseType: query.expense_type,
-        });
-      }
-
-      if (query.status) {
-        targetQb.andWhere('daily.status = :status', { status: query.status });
-      }
-
-      if (query.category) {
-        targetQb.andWhere('LOWER(daily.category) LIKE :category', {
-          category: `%${query.category.toLowerCase().trim()}%`,
-        });
-      }
-
-      if (query.search) {
-        if (!isItems) {
-          targetQb.leftJoin('daily.user', 'user');
+      const applyFilters = (
+        targetQb: SelectQueryBuilder<DailyExpense>,
+        isItems = false,
+      ) => {
+        if (query.user_id && query.user_id !== 'all') {
+          targetQb.andWhere('daily.user_id = :filterUserId', {
+            filterUserId: query.user_id,
+          });
         }
-        targetQb.andWhere(
-          '(LOWER(daily.note) LIKE :search OR LOWER(daily.category) LIKE :search OR LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search)',
-          { search: `%${query.search.toLowerCase().trim()}%` },
-        );
-      }
 
-      if (query.startDate) {
-        targetQb.andWhere('daily.expense_date >= :startDate', {
-          startDate: new Date(query.startDate),
-        });
-      }
+        if (query.expense_type) {
+          targetQb.andWhere('daily.expense_type = :expenseType', {
+            expenseType: query.expense_type,
+          });
+        }
 
-      if (query.endDate) {
-        const end = new Date(query.endDate);
-        end.setHours(23, 59, 59, 999);
-        targetQb.andWhere('daily.expense_date <= :endDate', { endDate: end });
-      }
-    };
+        if (query.status) {
+          targetQb.andWhere('daily.status = :status', { status: query.status });
+        }
 
-    applyFilters(itemsQb, true);
-    applyFilters(summaryQb, false);
+        if (query.category) {
+          targetQb.andWhere('LOWER(daily.category) LIKE :category', {
+            category: `%${query.category.toLowerCase().trim()}%`,
+          });
+        }
 
-    itemsQb.orderBy('daily.created_at', 'DESC').skip(skip).take(limit);
-
-    summaryQb.select([
-      'COUNT(daily.id) as "totalCount"',
-      'COALESCE(SUM(daily.amount), 0) as "totalAmount"',
-      `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalRoomAmount"`,
-      `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedRoomAmount"`,
-      `COALESCE(SUM(CASE WHEN daily.expense_type = 'own' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalOwnAmount"`,
-      `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedTotalAmount"`,
-      `COALESCE(SUM(CASE WHEN daily.status = 'PENDING' THEN 1 ELSE 0 END), 0) as "pendingCount"`,
-      `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN 1 ELSE 0 END), 0) as "approvedCount"`,
-      `COALESCE(SUM(CASE WHEN daily.status = 'REJECTED' THEN 1 ELSE 0 END), 0) as "rejectedCount"`,
-    ]);
-
-    const [itemsResult, summaryRaw] = await Promise.all([
-      itemsQb.getMany(),
-      summaryQb.getRawOne ? summaryQb.getRawOne() : Promise.resolve(null),
-    ]);
-
-    const items = itemsResult || [];
-    let total = Number(summaryRaw?.totalCount ?? items.length);
-    let totalAmount = Number(summaryRaw?.totalAmount ?? 0);
-    let totalRoomAmount = Number(summaryRaw?.totalRoomAmount ?? 0);
-    let totalOwnAmount = Number(summaryRaw?.totalOwnAmount ?? 0);
-    let pendingCount = Number(summaryRaw?.pendingCount ?? 0);
-    let approvedCount = Number(summaryRaw?.approvedCount ?? 0);
-    let rejectedCount = Number(summaryRaw?.rejectedCount ?? 0);
-
-    // Fallback if summaryRaw is not returned (e.g. basic mock in test)
-    if (!summaryRaw && items.length > 0) {
-      for (const item of items) {
-        const amt = Number(item.amount) || 0;
-        if (item.status === DailyExpenseStatus.APPROVED) {
-          totalAmount += amt;
-          if (item.expense_type === DailyExpenseType.ROOM) {
-            totalRoomAmount += amt;
-          } else {
-            totalOwnAmount += amt;
+        if (query.search) {
+          if (!isItems) {
+            targetQb.leftJoin('daily.user', 'user');
           }
-          approvedCount++;
-        } else if (item.status === DailyExpenseStatus.PENDING) {
-          pendingCount++;
-        } else if (item.status === DailyExpenseStatus.REJECTED) {
-          rejectedCount++;
+          targetQb.andWhere(
+            '(LOWER(daily.note) LIKE :search OR LOWER(daily.category) LIKE :search OR LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search)',
+            { search: `%${query.search.toLowerCase().trim()}%` },
+          );
+        }
+
+        if (query.startDate) {
+          targetQb.andWhere('daily.expense_date >= :startDate', {
+            startDate: new Date(query.startDate),
+          });
+        }
+
+        if (query.endDate) {
+          const end = new Date(query.endDate);
+          end.setHours(23, 59, 59, 999);
+          targetQb.andWhere('daily.expense_date <= :endDate', { endDate: end });
+        }
+      };
+
+      applyFilters(itemsQb, true);
+      applyFilters(summaryQb, false);
+
+      itemsQb.orderBy('daily.created_at', 'DESC').skip(skip).take(limit);
+
+      summaryQb.select([
+        'COUNT(daily.id) as "totalCount"',
+        'COALESCE(SUM(daily.amount), 0) as "totalAmount"',
+        `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalRoomAmount"`,
+        `COALESCE(SUM(CASE WHEN daily.expense_type = 'room' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedRoomAmount"`,
+        `COALESCE(SUM(CASE WHEN daily.expense_type = 'own' AND daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "totalOwnAmount"`,
+        `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN daily.amount ELSE 0 END), 0) as "approvedTotalAmount"`,
+        `COALESCE(SUM(CASE WHEN daily.status = 'PENDING' THEN 1 ELSE 0 END), 0) as "pendingCount"`,
+        `COALESCE(SUM(CASE WHEN daily.status = 'APPROVED' THEN 1 ELSE 0 END), 0) as "approvedCount"`,
+        `COALESCE(SUM(CASE WHEN daily.status = 'REJECTED' THEN 1 ELSE 0 END), 0) as "rejectedCount"`,
+      ]);
+
+      const [itemsResult, summaryRaw] = await Promise.all([
+        itemsQb.getMany(),
+        summaryQb.getRawOne ? summaryQb.getRawOne() : Promise.resolve(null),
+      ]);
+
+      const items = itemsResult || [];
+      let total = Number(summaryRaw?.totalCount ?? items.length);
+      let totalAmount = Number(summaryRaw?.totalAmount ?? 0);
+      let totalRoomAmount = Number(summaryRaw?.totalRoomAmount ?? 0);
+      let totalOwnAmount = Number(summaryRaw?.totalOwnAmount ?? 0);
+      let pendingCount = Number(summaryRaw?.pendingCount ?? 0);
+      let approvedCount = Number(summaryRaw?.approvedCount ?? 0);
+      let rejectedCount = Number(summaryRaw?.rejectedCount ?? 0);
+
+      // Fallback if summaryRaw is not returned (e.g. basic mock in test)
+      if (!summaryRaw && items.length > 0) {
+        for (const item of items) {
+          const amt = Number(item.amount) || 0;
+          if (item.status === DailyExpenseStatus.APPROVED) {
+            totalAmount += amt;
+            if (item.expense_type === DailyExpenseType.ROOM) {
+              totalRoomAmount += amt;
+            } else {
+              totalOwnAmount += amt;
+            }
+            approvedCount++;
+          } else if (item.status === DailyExpenseStatus.PENDING) {
+            pendingCount++;
+          } else if (item.status === DailyExpenseStatus.REJECTED) {
+            rejectedCount++;
+          }
         }
       }
-    }
 
-    return {
-      items,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit) || 1,
-      },
-      summary: {
-        totalAmount: Number(totalAmount.toFixed(2)),
-        totalRoomAmount: Number(totalRoomAmount.toFixed(2)),
-        approvedRoomAmount: Number(totalRoomAmount.toFixed(2)),
-        totalOwnAmount: Number(totalOwnAmount.toFixed(2)),
-        totalCount: total,
-        pendingCount,
-        approvedCount,
-        rejectedCount,
-      },
+      return {
+        items,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit) || 1,
+        },
+        summary: {
+          totalAmount: Number(totalAmount.toFixed(2)),
+          totalRoomAmount: Number(totalRoomAmount.toFixed(2)),
+          approvedRoomAmount: Number(totalRoomAmount.toFixed(2)),
+          totalOwnAmount: Number(totalOwnAmount.toFixed(2)),
+          totalCount: total,
+          pendingCount,
+          approvedCount,
+          rejectedCount,
+        },
+      };
     };
+
+    if (this.cacheService) {
+      return this.cacheService.wrap(cacheKey, execute, 10_000);
+    }
+    return execute();
   }
 
   /**
@@ -351,6 +368,7 @@ export class DailyExpenseService {
     }
 
     await this.dailyExpenseRepository.save(expense);
+    this.invalidateCache();
     return expense;
   }
 
@@ -396,6 +414,8 @@ export class DailyExpenseService {
     }
 
     await this.dailyExpenseRepository.save(expense);
+    this.invalidateCache();
+    this.expenseService?.invalidateCache?.();
 
     // Notify all active users in background via setImmediate so approve returns instantly
     const targetUserName = expense.user?.name || 'User';
@@ -444,6 +464,7 @@ export class DailyExpenseService {
     }
 
     await this.dailyExpenseRepository.save(expense);
+    this.invalidateCache();
     return expense;
   }
 
@@ -474,6 +495,7 @@ export class DailyExpenseService {
     }
 
     await this.dailyExpenseRepository.remove(expense);
+    this.invalidateCache();
   }
 
   /**
@@ -483,11 +505,12 @@ export class DailyExpenseService {
     query: QueryChartExpenseDto,
     currentUser: { id: string; role: UserRole },
   ) {
-    const now = new Date();
-    const targetYear = query.year ? Number(query.year) : now.getFullYear();
-    const targetMonth = query.month ? Number(query.month) : now.getMonth() + 1; // 1-12
+    const targetYear = query.year ? Number(query.year) : new Date().getFullYear();
+    const targetMonth = query.month ? Number(query.month) : new Date().getMonth() + 1;
+    const cacheKey = `daily:chart:${targetYear}:${targetMonth}:${query.user_id || 'all'}:${query.expense_type || 'all'}:${query.status || 'all'}:${currentUser.id}:${currentUser.role}`;
 
-    const qb = this.dailyExpenseRepository
+    const execute = async () => {
+      const qb = this.dailyExpenseRepository
       .createQueryBuilder('daily')
       .select([
         'daily.amount',
@@ -604,7 +627,7 @@ export class DailyExpenseService {
     let approvedCount = 0;
     let rejectedCount = 0;
 
-    const todayDateStr = now.toISOString().slice(0, 10);
+    const todayDateStr = new Date().toISOString().slice(0, 10);
 
     for (const exp of expenses) {
       const amt = Number(exp.amount) || 0;
@@ -765,6 +788,12 @@ export class DailyExpenseService {
       monthCategoryBreakdown,
       yearCategoryBreakdown,
     };
+  };
+
+  if (this.cacheService) {
+    return this.cacheService.wrap(cacheKey, execute, 20_000);
   }
+  return execute();
+}
 }
 

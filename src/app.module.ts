@@ -19,6 +19,7 @@ import { SettingModule } from './setting/setting.module.js';
 import { DailyExpenseModule } from './daily-expense/daily-expense.module.js';
 import { NotificationModule } from './notification/notification.module.js';
 import { CloudinaryModule } from './cloudinary/cloudinary.module.js';
+import { FastCacheModule } from './common/cache/fast-cache.module.js';
 
 export const { ObserveModule, ObserveInstrument } = createObserveModule();
 
@@ -28,6 +29,7 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
       isGlobal: true,
       envFilePath: '.env',
     }),
+    FastCacheModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       driver: pg,
@@ -57,10 +59,15 @@ export const { ObserveModule, ObserveInstrument } = createObserveModule();
                 rejectUnauthorized: false,
               }
             : false,
-        max: parseInt(process.env.DB_POOL_MAX || '25', 10),
-        min: parseInt(process.env.DB_POOL_MIN || '4', 10),
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 5000,
+        max: process.env.VERCEL
+          ? parseInt(process.env.DB_POOL_MAX || '3', 10)
+          : parseInt(process.env.DB_POOL_MAX || '60', 10),
+        min: process.env.VERCEL
+          ? 0
+          : parseInt(process.env.DB_POOL_MIN || '5', 10),
+        idleTimeoutMillis: process.env.VERCEL ? 5000 : 30000,
+        connectionTimeoutMillis: 10000,
+        statement_timeout: 20000,
         keepAlive: true,
         keepAliveInitialDelayMillis: 10000,
       },

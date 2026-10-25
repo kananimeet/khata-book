@@ -1,6 +1,11 @@
+// Optimize Node.js threadpool size for concurrent crypto/bcrypt and async I/O
+process.env.UV_THREADPOOL_SIZE = process.env.UV_THREADPOOL_SIZE || '64';
+
+import cluster from 'node:cluster';
+import os from 'node:os';
 import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
@@ -19,7 +24,17 @@ async function bootstrap() {
     isObserveEnabled ? { instrument: ObserveInstrument } : {},
   );
 
-  app.use(compression());
+  // High-performance compression: skip payloads smaller than 1KB to save CPU cycles
+  app.use(
+    compression({
+      threshold: 1024,
+      level: 6,
+    }),
+  );
+
+  // Disable x-powered-by and enable HTTP strong ETag for 304 Not Modified caching
+  app.set('x-powered-by', false);
+  app.set('etag', 'strong');
 
   try {
     const uploadsPath = join(process.cwd(), 'uploads');
@@ -28,6 +43,7 @@ async function bootstrap() {
     }
     app.useStaticAssets(uploadsPath, {
       prefix: '/uploads/',
+      maxAge: 86400000, // 1 day browser cache for static images/uploads
     });
   } catch {
     // Ignore read-only filesystem errors in serverless environments
@@ -62,7 +78,30 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port);
+  Logger.log(`🚀 Khata Book API running on port ${port} (PID: ${process.pid})`, 'Bootstrap');
 }
 
-await bootstrap();
+// Cluster mode support for maximum multi-core CPU utilization
+if (process.env.CLUSTER_MODE === 'true' && cluster.isPrimary) {
+  const numCPUs = process.env.WEB_CONCURRENCY
+    ? parseInt(process.env.WEB_CONCURRENCY, 10)
+    : Math.min(os.cpus().length, 4);
+  Logger.log(`Cluster master ${process.pid} running. Forking ${numCPUs} workers...`, 'Cluster');
+
+  for (let i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+
+  cluster.on('exit', (worker, code, signal) => {
+    Logger.warn(
+      `Worker ${worker.process.pid} died (${signal || code}). Spawning replacement...`,
+      'Cluster',
+    );
+    cluster.fork();
+  });
+} else {
+  await bootstrap();
+}
+

@@ -39,6 +39,7 @@ import {
 import { SettingService } from '../setting/setting.service.js';
 import { NotificationService } from '../notification/notification.service.js';
 import { NotificationType } from '../notification/entities/notification.entity.js';
+import { FastCacheService } from '../common/cache/fast-cache.service.js';
 
 @Injectable()
 export class ExpenseService {
@@ -54,7 +55,13 @@ export class ExpenseService {
     private readonly settingService: SettingService,
     @Optional()
     private readonly notificationService?: NotificationService,
+    @Optional()
+    private readonly cacheService?: FastCacheService,
   ) {}
+
+  public invalidateCache(): void {
+    this.cacheService?.deleteByPrefix('expenses:');
+  }
 
   /**
    * User or Admin creates an expense request.
@@ -196,6 +203,7 @@ export class ExpenseService {
       });
     });
 
+    this.invalidateCache();
     return result;
   }
 
@@ -299,6 +307,7 @@ export class ExpenseService {
       });
     });
 
+    this.invalidateCache();
     return result;
   }
 
@@ -406,6 +415,7 @@ export class ExpenseService {
       });
     });
 
+    this.invalidateCache();
     return result;
   }
 
@@ -469,6 +479,7 @@ export class ExpenseService {
 
     await this.expenseRepository.save(expense);
 
+    this.invalidateCache();
     return this.findById(expense.id, {
       id: expense.user_id,
       role: UserRole.ADMIN,
@@ -557,6 +568,7 @@ export class ExpenseService {
       });
     });
 
+    this.invalidateCache();
     return result;
   }
 
@@ -622,6 +634,7 @@ export class ExpenseService {
       await this.expenseRepository.save(expense);
     }
 
+    this.invalidateCache();
     return this.findById(payment.expense_id, {
       id: payment.user_id,
       role: UserRole.ADMIN,
@@ -708,6 +721,7 @@ export class ExpenseService {
 
     await this.expenseRepository.save(expense);
 
+    this.invalidateCache();
     return this.findById(expense.id, {
       id: expense.user_id,
       role: UserRole.ADMIN,
@@ -747,126 +761,135 @@ export class ExpenseService {
     query: QueryExpenseDto,
     currentUser?: { id: string; role: UserRole },
   ) {
-    const page = Math.max(1, query.page || 1);
-    const limit = Math.max(1, query.limit || 10);
-    const skip = (page - 1) * limit;
+    const cacheKey = `expenses:list:${JSON.stringify(query)}:${currentUser?.id || 'all'}:${currentUser?.role || 'all'}`;
 
-    const qb: SelectQueryBuilder<Expense> = this.expenseRepository
-      .createQueryBuilder('expense')
-      .leftJoin('expense.user', 'user')
-      .addSelect([
-        'user.id',
-        'user.name',
-        'user.email',
-        'user.mobile',
-        'user.profile_picture',
-        'user.role',
-      ])
-      .leftJoinAndSelect('expense.payments', 'payments');
+    const execute = async () => {
+      const page = Math.max(1, query.page || 1);
+      const limit = Math.max(1, query.limit || 10);
+      const skip = (page - 1) * limit;
 
-    // Filter by specific user_id if requested
-    if (query.user_id) {
-      qb.andWhere('expense.user_id = :userId', { userId: query.user_id });
-    }
+      const qb: SelectQueryBuilder<Expense> = this.expenseRepository
+        .createQueryBuilder('expense')
+        .leftJoin('expense.user', 'user')
+        .addSelect([
+          'user.id',
+          'user.name',
+          'user.email',
+          'user.mobile',
+          'user.profile_picture',
+          'user.role',
+        ])
+        .leftJoinAndSelect('expense.payments', 'payments');
 
-    if (query.status) {
-      qb.andWhere('expense.status = :status', { status: query.status });
-    }
+      // Filter by specific user_id if requested
+      if (query.user_id) {
+        qb.andWhere('expense.user_id = :userId', { userId: query.user_id });
+      }
 
-    if (query.search) {
-      qb.andWhere(
-        '(expense.note ILIKE :search OR user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
-    }
+      if (query.status) {
+        qb.andWhere('expense.status = :status', { status: query.status });
+      }
 
-    if (query.startDate) {
-      qb.andWhere('expense.created_at >= :startDate', {
-        startDate: new Date(query.startDate),
-      });
-    }
+      if (query.search) {
+        qb.andWhere(
+          '(expense.note ILIKE :search OR user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
+          { search: `%${query.search}%` },
+        );
+      }
 
-    if (query.endDate) {
-      const end = new Date(query.endDate);
-      end.setHours(23, 59, 59, 999);
-      qb.andWhere('expense.created_at <= :endDate', { endDate: end });
-    }
+      if (query.startDate) {
+        qb.andWhere('expense.created_at >= :startDate', {
+          startDate: new Date(query.startDate),
+        });
+      }
 
-    qb.orderBy('expense.created_at', 'DESC');
-    qb.skip(skip).take(limit);
+      if (query.endDate) {
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+        qb.andWhere('expense.created_at <= :endDate', { endDate: end });
+      }
 
-    // Compute summary totals for all matching records concurrently
-    const summaryQb = this.expenseRepository
-      .createQueryBuilder('expense')
-      .leftJoin('expense.user', 'user');
+      qb.orderBy('expense.created_at', 'DESC');
+      qb.skip(skip).take(limit);
 
-    if (query.user_id) {
-      summaryQb.andWhere('expense.user_id = :userId', { userId: query.user_id });
-    }
+      // Compute summary totals for all matching records concurrently
+      const summaryQb = this.expenseRepository
+        .createQueryBuilder('expense')
+        .leftJoin('expense.user', 'user');
 
-    if (query.status) {
-      summaryQb.andWhere('expense.status = :status', { status: query.status });
-    }
+      if (query.user_id) {
+        summaryQb.andWhere('expense.user_id = :userId', { userId: query.user_id });
+      }
 
-    if (query.search) {
-      summaryQb.andWhere(
-        '(expense.note ILIKE :search OR user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
-        { search: `%${query.search}%` },
-      );
-    }
+      if (query.status) {
+        summaryQb.andWhere('expense.status = :status', { status: query.status });
+      }
 
-    if (query.startDate) {
-      summaryQb.andWhere('expense.created_at >= :startDate', {
-        startDate: new Date(query.startDate),
-      });
-    }
+      if (query.search) {
+        summaryQb.andWhere(
+          '(expense.note ILIKE :search OR user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
+          { search: `%${query.search}%` },
+        );
+      }
 
-    if (query.endDate) {
-      const end = new Date(query.endDate);
-      end.setHours(23, 59, 59, 999);
-      summaryQb.andWhere('expense.created_at <= :endDate', { endDate: end });
-    }
+      if (query.startDate) {
+        summaryQb.andWhere('expense.created_at >= :startDate', {
+          startDate: new Date(query.startDate),
+        });
+      }
 
-    const [itemsAndCount, rawSummary] = await Promise.all([
-      qb.getManyAndCount(),
-      summaryQb
-        .select(
-          "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.total_amount ELSE 0 END), 0)",
-          'totalRoomRate',
-        )
-        .addSelect('COALESCE(SUM(expense.paid_amount), 0)', 'totalApproved')
-        .addSelect(
-          "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.remaining_amount ELSE 0 END), 0)",
-          'totalRemaining',
-        )
-        .addSelect(
-          "COALESCE(SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END), 0)",
-          'totalPending',
-        )
-        .getRawOne(),
-    ]);
+      if (query.endDate) {
+        const end = new Date(query.endDate);
+        end.setHours(23, 59, 59, 999);
+        summaryQb.andWhere('expense.created_at <= :endDate', { endDate: end });
+      }
 
-    const [items, total] = itemsAndCount;
-    const totalPages = Math.ceil(total / limit);
+      const [itemsAndCount, rawSummary] = await Promise.all([
+        qb.getManyAndCount(),
+        summaryQb
+          .select(
+            "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.total_amount ELSE 0 END), 0)",
+            'totalRoomRate',
+          )
+          .addSelect('COALESCE(SUM(expense.paid_amount), 0)', 'totalApproved')
+          .addSelect(
+            "COALESCE(SUM(CASE WHEN expense.status IN ('REMAINING', 'COMPLETE') THEN expense.remaining_amount ELSE 0 END), 0)",
+            'totalRemaining',
+          )
+          .addSelect(
+            "COALESCE(SUM(CASE WHEN expense.status = 'PENDING' THEN expense.pay_amount ELSE 0 END), 0)",
+            'totalPending',
+          )
+          .getRawOne(),
+      ]);
 
-    const summary = {
-      totalRoomRateAmount: Number(rawSummary?.totalRoomRate || 0),
-      totalApprovedAmount: Number(rawSummary?.totalApproved || 0),
-      totalPendingAmount: Number(rawSummary?.totalPending || 0),
-      totalRemainingAmount: Number(rawSummary?.totalRemaining || 0),
-      totalRecords: total,
+      const [items, total] = itemsAndCount;
+      const totalPages = Math.ceil(total / limit);
+
+      const summary = {
+        totalRoomRateAmount: Number(rawSummary?.totalRoomRate || 0),
+        totalApprovedAmount: Number(rawSummary?.totalApproved || 0),
+        totalPendingAmount: Number(rawSummary?.totalPending || 0),
+        totalRemainingAmount: Number(rawSummary?.totalRemaining || 0),
+        totalRecords: total,
+      };
+
+      return {
+        items,
+        meta: {
+          page,
+          limit,
+          total,
+          totalPages,
+        },
+        summary,
+      };
     };
 
-    return {
-      items,
-      meta: {
-        page,
-        limit,
-        total,
-        totalPages,
-      },
-      summary,
-    };
+    if (this.cacheService) {
+      return this.cacheService.wrap(cacheKey, execute, 10_000);
+    }
+    return execute();
   }
 
   /**
@@ -880,178 +903,187 @@ export class ExpenseService {
     currentUser: { id: string; role: UserRole },
     search?: string,
   ) {
-    const userQb = this.userRepository.createQueryBuilder('user');
-    if (typeof userQb.select === 'function') {
-      userQb.select([
-        'user.id',
-        'user.name',
-        'user.email',
-        'user.mobile',
-        'user.profile_picture',
-        'user.role',
-      ]);
-    }
+    const cacheKey = `expenses:totals:${currentUser.id}:${currentUser.role}:${search || ''}`;
 
-    // Normal users only see their own summary; Admin sees all non-admin users
-    if (currentUser.role === UserRole.USER) {
-      userQb.where('user.id = :userId', { userId: currentUser.id });
-    } else {
-      userQb.where('user.role != :adminRole', { adminRole: UserRole.ADMIN });
-    }
+    const execute = async () => {
+      const userQb = this.userRepository.createQueryBuilder('user');
+      if (typeof userQb.select === 'function') {
+        userQb.select([
+          'user.id',
+          'user.name',
+          'user.email',
+          'user.mobile',
+          'user.profile_picture',
+          'user.role',
+        ]);
+      }
 
-    if (search) {
-      userQb.andWhere(
-        '(user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
-        { search: `%${search}%` },
-      );
-    }
+      // Normal users only see their own summary; Admin sees all non-admin users
+      if (currentUser.role === UserRole.USER) {
+        userQb.where('user.id = :userId', { userId: currentUser.id });
+      } else {
+        userQb.where('user.role != :adminRole', { adminRole: UserRole.ADMIN });
+      }
 
-    userQb.orderBy('user.name', 'ASC');
-    const users = await userQb.getMany();
+      if (search) {
+        userQb.andWhere(
+          '(user.name ILIKE :search OR user.email ILIKE :search OR user.mobile ILIKE :search)',
+          { search: `%${search}%` },
+        );
+      }
 
-    if (users.length === 0) {
-      return {
-        users: [],
-        grandSummary: {
-          grandTotalRoomRate: 0,
-          grandTotalApproved: 0,
-          grandTotalPending: 0,
-          grandTotalRemaining: 0,
-          totalUsers: 0,
-        },
-      };
-    }
+      userQb.orderBy('user.name', 'ASC');
+      const users = await userQb.getMany();
 
-    const userIds = users.map((u) => u.id);
+      if (users.length === 0) {
+        return {
+          users: [],
+          grandSummary: {
+            grandTotalRoomRate: 0,
+            grandTotalApproved: 0,
+            grandTotalPending: 0,
+            grandTotalRemaining: 0,
+            totalUsers: 0,
+          },
+        };
+      }
 
-    // Fetch all expenses and payments for these users
-    const allExpenses = await this.expenseRepository
-      .createQueryBuilder('expense')
-      .leftJoinAndSelect('expense.payments', 'payments')
-      .where('expense.user_id IN (:...userIds)', { userIds })
-      .orderBy('expense.created_at', 'DESC')
-      .getMany();
+      const userIds = users.map((u) => u.id);
 
-    // Map expenses by user_id
-    const expensesByUser = new Map<string, Expense[]>();
-    for (const exp of allExpenses) {
-      const list = expensesByUser.get(exp.user_id) || [];
-      list.push(exp);
-      expensesByUser.set(exp.user_id, list);
-    }
+      // Fetch all expenses and payments for these users
+      const allExpenses = await this.expenseRepository
+        .createQueryBuilder('expense')
+        .leftJoinAndSelect('expense.payments', 'payments')
+        .where('expense.user_id IN (:...userIds)', { userIds })
+        .orderBy('expense.created_at', 'DESC')
+        .getMany();
 
-    let grandTotalRoomRate = 0;
-    let grandTotalApproved = 0;
-    let grandTotalPending = 0;
-    let grandTotalRemaining = 0;
+      // Map expenses by user_id
+      const expensesByUser = new Map<string, Expense[]>();
+      for (const exp of allExpenses) {
+        const list = expensesByUser.get(exp.user_id) || [];
+        list.push(exp);
+        expensesByUser.set(exp.user_id, list);
+      }
 
-    const userList = users.map((user) => {
-      const userExpenses = expensesByUser.get(user.id) || [];
+      let grandTotalRoomRate = 0;
+      let grandTotalApproved = 0;
+      let grandTotalPending = 0;
+      let grandTotalRemaining = 0;
 
-      let totalRoomRate = 0;
-      let totalApproved = 0; // The "total" that changes only when admin approves!
-      let totalPending = 0;
-      let totalRemaining = 0;
+      const userList = users.map((user) => {
+        const userExpenses = expensesByUser.get(user.id) || [];
 
-      let pendingCount = 0;
-      let remainingCount = 0;
-      let completeCount = 0;
-      let rejectedCount = 0;
+        let totalRoomRate = 0;
+        let totalApproved = 0; // The "total" that changes only when admin approves!
+        let totalPending = 0;
+        let totalRemaining = 0;
 
-      const requestsSummary = userExpenses.map((exp) => {
-        const total = Number(exp.total_amount);
-        const approved = Number(exp.paid_amount);
-        const remaining = Number(exp.remaining_amount);
-        const requested = Number(exp.pay_amount);
+        let pendingCount = 0;
+        let remainingCount = 0;
+        let completeCount = 0;
+        let rejectedCount = 0;
 
-        if (exp.status === ExpenseStatus.PENDING) {
-          totalPending += requested;
-          pendingCount++;
-        } else if (exp.status === ExpenseStatus.REMAINING) {
-          totalRoomRate += total;
-          totalApproved += approved;
-          totalRemaining += remaining;
-          remainingCount++;
-        } else if (exp.status === ExpenseStatus.COMPLETE) {
-          totalRoomRate += total;
-          totalApproved += approved;
-          totalRemaining += remaining;
-          completeCount++;
-        } else if (exp.status === ExpenseStatus.REJECTED) {
-          rejectedCount++;
+        const requestsSummary = userExpenses.map((exp) => {
+          const total = Number(exp.total_amount);
+          const approved = Number(exp.paid_amount);
+          const remaining = Number(exp.remaining_amount);
+          const requested = Number(exp.pay_amount);
+
+          if (exp.status === ExpenseStatus.PENDING) {
+            totalPending += requested;
+            pendingCount++;
+          } else if (exp.status === ExpenseStatus.REMAINING) {
+            totalRoomRate += total;
+            totalApproved += approved;
+            totalRemaining += remaining;
+            remainingCount++;
+          } else if (exp.status === ExpenseStatus.COMPLETE) {
+            totalRoomRate += total;
+            totalApproved += approved;
+            totalRemaining += remaining;
+            completeCount++;
+          } else if (exp.status === ExpenseStatus.REJECTED) {
+            rejectedCount++;
+          }
+
+          return {
+            id: exp.id,
+            note: exp.note,
+            total_amount: total,
+            requested_amount: requested,
+            approved_amount: approved, // 0 when pending, 5000 when approved
+            remaining_amount: remaining,
+            status: exp.status,
+            payments: exp.payments || [],
+            created_at: exp.created_at,
+            updated_at: exp.updated_at,
+          };
+        });
+
+        grandTotalRoomRate += totalRoomRate;
+        grandTotalApproved += totalApproved;
+        grandTotalPending += totalPending;
+        grandTotalRemaining += totalRemaining;
+
+        // Overall user status
+        let overallStatus = 'NO_REQUESTS';
+        if (userExpenses.length > 0) {
+          if (remainingCount > 0 || (totalApproved > 0 && totalRemaining > 0)) {
+            overallStatus = ExpenseStatus.REMAINING;
+          } else if (pendingCount > 0 && totalApproved === 0) {
+            overallStatus = ExpenseStatus.PENDING;
+          } else if (totalApproved > 0 && totalRemaining === 0) {
+            overallStatus = ExpenseStatus.COMPLETE;
+          } else if (rejectedCount === userExpenses.length) {
+            overallStatus = ExpenseStatus.REJECTED;
+          } else {
+            overallStatus = userExpenses[0]?.status || ExpenseStatus.PENDING;
+          }
         }
 
         return {
-          id: exp.id,
-          note: exp.note,
-          total_amount: total,
-          requested_amount: requested,
-          approved_amount: approved, // 0 when pending, 5000 when approved
-          remaining_amount: remaining,
-          status: exp.status,
-          payments: exp.payments || [],
-          created_at: exp.created_at,
-          updated_at: exp.updated_at,
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            mobile: user.mobile,
+            profile_picture: user.profile_picture,
+          },
+          // EXACT fields matching user requirement:
+          total: totalApproved, // 0 when pending, 5000 when approved!
+          total_amount: totalRoomRate,
+          total_approved: totalApproved,
+          total_pending: totalPending,
+          total_remaining: totalRemaining,
+          status: overallStatus,
+          counts: {
+            total: userExpenses.length,
+            pending: pendingCount,
+            remaining: remainingCount,
+            complete: completeCount,
+            rejected: rejectedCount,
+          },
+          requests: requestsSummary,
         };
       });
 
-      grandTotalRoomRate += totalRoomRate;
-      grandTotalApproved += totalApproved;
-      grandTotalPending += totalPending;
-      grandTotalRemaining += totalRemaining;
-
-      // Overall user status
-      let overallStatus = 'NO_REQUESTS';
-      if (userExpenses.length > 0) {
-        if (remainingCount > 0 || (totalApproved > 0 && totalRemaining > 0)) {
-          overallStatus = ExpenseStatus.REMAINING;
-        } else if (pendingCount > 0 && totalApproved === 0) {
-          overallStatus = ExpenseStatus.PENDING;
-        } else if (totalApproved > 0 && totalRemaining === 0) {
-          overallStatus = ExpenseStatus.COMPLETE;
-        } else if (rejectedCount === userExpenses.length) {
-          overallStatus = ExpenseStatus.REJECTED;
-        } else {
-          overallStatus = userExpenses[0]?.status || ExpenseStatus.PENDING;
-        }
-      }
-
       return {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          mobile: user.mobile,
-          profile_picture: user.profile_picture,
+        users: userList,
+        grandSummary: {
+          grandTotalRoomRate,
+          grandTotalApproved, // Changes when admin approves!
+          grandTotalPending,
+          grandTotalRemaining,
+          totalUsers: users.length,
         },
-        // EXACT fields matching user requirement:
-        total: totalApproved, // 0 when pending, 5000 when approved!
-        total_amount: totalRoomRate,
-        total_approved: totalApproved,
-        total_pending: totalPending,
-        total_remaining: totalRemaining,
-        status: overallStatus,
-        counts: {
-          total: userExpenses.length,
-          pending: pendingCount,
-          remaining: remainingCount,
-          complete: completeCount,
-          rejected: rejectedCount,
-        },
-        requests: requestsSummary,
       };
-    });
-
-    return {
-      users: userList,
-      grandSummary: {
-        grandTotalRoomRate,
-        grandTotalApproved, // Changes when admin approves!
-        grandTotalPending,
-        grandTotalRemaining,
-        totalUsers: users.length,
-      },
     };
+
+    if (this.cacheService) {
+      return this.cacheService.wrap(cacheKey, execute, 15_000);
+    }
+    return execute();
   }
 
   /**
@@ -1063,6 +1095,7 @@ export class ExpenseService {
       throw new NotFoundException(EXPENSE_NOT_FOUND);
     }
     await this.expenseRepository.remove(expense);
+    this.invalidateCache();
   }
 
   /**
@@ -1173,6 +1206,7 @@ export class ExpenseService {
         }
       }
 
+      this.invalidateCache();
       return {
         adjustedExpenseId: expense.id,
         previousTotal: prevTotal,
