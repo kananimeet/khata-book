@@ -14,7 +14,10 @@ export class UserResponseDto {
   @ApiProperty({ enum: UserRole, example: UserRole.ADMIN })
   role: UserRole;
 
-  @ApiProperty({ example: true, description: 'Login status (true after first successful login)' })
+  @ApiProperty({
+    example: true,
+    description: 'Login status (true after first successful login)',
+  })
   has_login: boolean;
 }
 
@@ -22,7 +25,10 @@ export class LoginResponseDto {
   @ApiProperty({ example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' })
   access_token: string;
 
-  @ApiProperty({ example: true, description: 'Login status (true after first successful login)' })
+  @ApiProperty({
+    example: true,
+    description: 'Login status (true after first successful login)',
+  })
   has_login: boolean;
 
   @ApiProperty({ type: UserResponseDto })

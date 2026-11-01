@@ -64,6 +64,11 @@ export class AuthService {
       user.has_login = true;
     }
 
+    if (dto.fcm_token) {
+      await this.userService.updateFcmToken(user.id, dto.fcm_token);
+      user.fcm_token = dto.fcm_token;
+    }
+
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
@@ -182,6 +187,11 @@ export class AuthService {
     if (!user.has_login) {
       await this.userService.updateHasLogin(user.id, true);
       user.has_login = true;
+    }
+
+    if (dto.fcm_token) {
+      await this.userService.updateFcmToken(user.id, dto.fcm_token);
+      user.fcm_token = dto.fcm_token;
     }
 
     const payload: JwtPayload = {

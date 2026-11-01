@@ -38,7 +38,9 @@ describe('AuthService - Password Setup & User Login', () => {
         password: null,
       });
 
-      const result = await authService.checkEmail({ email: 'user@example.com' });
+      const result = await authService.checkEmail({
+        email: 'user@example.com',
+      });
 
       expect(result.exists).toBe(true);
       expect(result.is_password_set).toBe(false);
@@ -58,7 +60,9 @@ describe('AuthService - Password Setup & User Login', () => {
         password: 'hashed-password',
       });
 
-      const result = await authService.checkEmail({ email: 'user@example.com' });
+      const result = await authService.checkEmail({
+        email: 'user@example.com',
+      });
 
       expect(result.exists).toBe(true);
       expect(result.is_password_set).toBe(true);
@@ -93,7 +97,10 @@ describe('AuthService - Password Setup & User Login', () => {
       });
 
       expect(mockUserService.updatePassword).toHaveBeenCalled();
-      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith('uuid-1', true);
+      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith(
+        'uuid-1',
+        true,
+      );
       expect(result.access_token).toBe('mock-jwt-token');
       expect(result.has_login).toBe(true);
       expect(result.user.email).toBe('user@example.com');
@@ -157,7 +164,10 @@ describe('AuthService - Password Setup & User Login', () => {
         password: 'Password@123',
       });
 
-      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith('uuid-1', true);
+      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith(
+        'uuid-1',
+        true,
+      );
       expect(result.access_token).toBe('mock-jwt-token');
       expect(result.has_login).toBe(true);
       expect(result.user.email).toBe('user@example.com');
@@ -226,7 +236,10 @@ describe('AuthService - Password Setup & User Login', () => {
         password: 'Admin@123',
       });
 
-      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith('admin-uuid', true);
+      expect(mockUserService.updateHasLogin).toHaveBeenCalledWith(
+        'admin-uuid',
+        true,
+      );
       expect(result.access_token).toBe('mock-jwt-token');
       expect(result.has_login).toBe(true);
       expect(result.user.has_login).toBe(true);

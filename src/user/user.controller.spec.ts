@@ -67,7 +67,10 @@ describe('UserController', () => {
       profile_picture: '',
     };
 
-    mockUserService.create.mockResolvedValue({ id: 'uuid-1', ...createUserDto });
+    mockUserService.create.mockResolvedValue({
+      id: 'uuid-1',
+      ...createUserDto,
+    });
 
     await controller.create(createUserDto, undefined);
 
